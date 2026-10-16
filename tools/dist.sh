@@ -68,9 +68,11 @@ for fetch_platform in "${fetch_platforms[@]}"; do
 	# The release passes ffmpeg between jobs as an artifact, which loses the
 	# executable bit; the app cannot ship a tool it cannot run, and
 	# fetch-tools.sh would rebuild one that is not executable.
-	if [[ -f "resources/$fetch_platform/bin/ffmpeg" ]]; then
-		chmod +x "resources/$fetch_platform/bin/ffmpeg"
-	fi
+	for ffmpeg in "resources/$fetch_platform/bin/ffmpeg" "resources/$fetch_platform/bin/ffmpeg.exe"; do
+		if [[ -f "$ffmpeg" ]]; then
+			chmod +x "$ffmpeg"
+		fi
+	done
 	if [[ "$minimal" == true ]]; then
 		scripts/fetch-tools.sh --minimal "$fetch_platform"
 	else
