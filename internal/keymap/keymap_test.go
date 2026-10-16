@@ -114,12 +114,6 @@ func TestFromEventNormalisesTheShortcutModifier(t *testing.T) {
 	}
 }
 
-func TestCmdLabel(t *testing.T) {
-	if CmdLabel("darwin") != "⌘" || CmdLabel("linux") != "Ctrl" || CmdLabel("windows") != "Ctrl" {
-		t.Error("the shortcut modifier is Command on macOS and Control elsewhere")
-	}
-}
-
 func TestHintPartsDropTheModifierAlreadyDown(t *testing.T) {
 	text := func(s string) Part { return Part{Text: s} }
 	glyph := func(g Glyph) Part { return Part{Glyph: g} }

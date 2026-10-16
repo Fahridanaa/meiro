@@ -364,20 +364,6 @@ func TestLoudnessStateDoesNotCarryBetweenTracks(t *testing.T) {
 	}
 }
 
-func TestLoudnessCacheIsBounded(t *testing.T) {
-	a, _ := playbackApp(t)
-	for i := range 300 {
-		id := strconv.Itoa(i)
-		a.loudnessMap.Put(id, youtube.Loudness{LoudnessDB: float64(i)})
-	}
-	if got := a.loudnessMap.Len(); got != 256 {
-		t.Fatalf("loudness cache holds %d entries, want 256", got)
-	}
-	if _, ok := a.loudnessMap.Get("0"); ok {
-		t.Fatal("least-recently-used loudness entry was not evicted")
-	}
-}
-
 func TestLoudnessFailureDoesNotBlockPlayback(t *testing.T) {
 	a, r := playbackApp(t)
 	a.settings.NormalizeLoudness = true

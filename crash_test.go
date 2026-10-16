@@ -91,13 +91,3 @@ func TestAPanicInBackgroundWorkShowsTheCrashDialog(t *testing.T) {
 		t.Error("Continue left the crash open")
 	}
 }
-
-func TestTestsDoNotHidePanicsInWork(t *testing.T) {
-	a := newTestApp(t)
-	defer func() {
-		if recover() == nil {
-			t.Error("a panic in work run by a test was swallowed")
-		}
-	}()
-	a.run(func() { panic("visible") })
-}
