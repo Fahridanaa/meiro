@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -26,8 +27,29 @@ func TestMain(m *testing.M) {
 
 // fakeBrowser serves the one DevTools command the sign-in uses. "signin"
 // shows a signed-out page for two reads and then a signed-in one; "quit"
-// goes away on the first read, as a window the user closed does.
+// goes away on the first read, as a window the user closed does. "firefox"
+// writes the cookie database of a profile and waits to be killed;
+// "firefox-quit" exits at once.
 func fakeBrowser(mode string, args []string) {
+	if mode == "firefox" || mode == "firefox-quit" {
+		profile := valueAfter(args, "-profile")
+		if profile == "" {
+			os.Exit(2)
+		}
+		// The reader only passes its database gate once this file exists.
+		if err := os.WriteFile(filepath.Join(profile, "cookies.sqlite"), nil, 0o600); err != nil {
+			os.Exit(2)
+		}
+		if err := os.WriteFile(os.Getenv("MEIRO_FAKE_BROWSER_PROFILE"), []byte(profile), 0o600); err != nil {
+			os.Exit(2)
+		}
+		if mode == "firefox-quit" {
+			os.Exit(0)
+		}
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
 	var profile string
 	for _, arg := range args {
 		if v, ok := strings.CutPrefix(arg, "--user-data-dir="); ok {
@@ -98,6 +120,16 @@ func itoa(n int) string {
 	return string(b)
 }
 
+// valueAfter is the argument after name, or "".
+func valueAfter(args []string, name string) string {
+	for i, arg := range args {
+		if arg == name && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 func fakeWindow(t *testing.T, mode string) WindowOptions {
 	t.Helper()
 	exe, err := os.Executable()
@@ -107,6 +139,23 @@ func fakeWindow(t *testing.T, mode string) WindowOptions {
 	t.Setenv("MEIRO_FAKE_BROWSER", mode)
 	t.Setenv("MEIRO_FAKE_BROWSER_PROFILE", filepath.Join(t.TempDir(), "profile-path"))
 	return WindowOptions{Executable: exe, Poll: 10 * time.Millisecond, Settle: 30 * time.Millisecond}
+}
+
+func fakeFirefoxWindow(t *testing.T, mode string, read profileReader) WindowOptions {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MEIRO_FAKE_BROWSER", mode)
+	t.Setenv("MEIRO_FAKE_BROWSER_PROFILE", filepath.Join(t.TempDir(), "profile-path"))
+	return WindowOptions{
+		Executable: exe,
+		family:     firefoxFamily,
+		read:       read,
+		Poll:       10 * time.Millisecond,
+		Settle:     30 * time.Millisecond,
+	}
 }
 
 func TestSignInWindowWaitsForTheSessionThenDeletesTheProfile(t *testing.T) {
@@ -150,19 +199,126 @@ func TestSignInWindowStopsWhenCancelled(t *testing.T) {
 	}
 }
 
-func TestSignInWindowWithoutABrowser(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
-	if _, err := SignInWindow(context.Background(), WindowOptions{}); !errors.Is(err, ErrNoBrowser) && !chromiumInstalledAtFixedPath() {
-		t.Errorf("err = %v, want ErrNoBrowser", err)
+func TestSignInWindowFirefoxReadsTheSessionFromACookieDatabase(t *testing.T) {
+	calls := 0
+	var firstRead time.Time
+	options := fakeFirefoxWindow(t, "firefox", func(_ context.Context, profile string) (string, error) {
+		calls++
+		if firstRead.IsZero() {
+			firstRead = time.Now()
+		}
+		if _, err := os.Stat(filepath.Join(profile, "cookies.sqlite")); err != nil {
+			t.Errorf("the reader saw no cookie database: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(profile, "user.js")); err != nil {
+			t.Errorf("the reader saw no Firefox preferences: %v", err)
+		}
+		return "SAPISID=live; SID=session", nil
+	})
+	got, err := SignInWindow(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "SAPISID=live; SID=session"; got != want {
+		t.Errorf("header = %q, want %q", got, want)
+	}
+	// The store does not change after the first read, so yt-dlp runs once
+	// and the cached header still waits out the settle time.
+	if calls != 1 {
+		t.Errorf("the reader ran %d times, want 1 while the store is unchanged", calls)
+	}
+	if waited := time.Since(firstRead); waited < options.Settle {
+		t.Errorf("the session came back after %v, want at least the settle time %v", waited, options.Settle)
+	}
+	profile, err := os.ReadFile(os.Getenv("MEIRO_FAKE_BROWSER_PROFILE"))
+	if err != nil || len(profile) == 0 {
+		t.Fatalf("the browser was not started with a profile: %v", err)
+	}
+	if !strings.Contains(string(profile), "signin-") {
+		t.Errorf("the browser got %q, want a private profile", profile)
+	}
+	if _, err := os.Stat(string(profile)); !os.IsNotExist(err) {
+		t.Errorf("the profile %s was left behind: %v", profile, err)
 	}
 }
 
-// chromiumInstalledAtFixedPath is true on a machine where a browser sits at a
-// fixed location that no PATH change hides.
-func chromiumInstalledAtFixedPath() bool {
-	_, ok := findChromium(context.Background())
-	return ok
+func TestSignInWindowFirefoxReportsAClosedWindow(t *testing.T) {
+	options := fakeFirefoxWindow(t, "firefox-quit", func(context.Context, string) (string, error) {
+		return "", nil
+	})
+	if _, err := SignInWindow(context.Background(), options); !errors.Is(err, ErrWindowClosed) {
+		t.Errorf("err = %v, want ErrWindowClosed", err)
+	}
+}
+
+func TestSignInWindowFirefoxNeedsYtDlp(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	options := fakeFirefoxWindow(t, "firefox", nil)
+	_, err := SignInWindow(context.Background(), options)
+	if err == nil || !strings.Contains(err.Error(), "yt-dlp") {
+		t.Errorf("err = %v, want an error about yt-dlp", err)
+	}
+	if _, statErr := os.Stat(os.Getenv("MEIRO_FAKE_BROWSER_PROFILE")); !os.IsNotExist(statErr) {
+		t.Errorf("the browser started without yt-dlp: %v", statErr)
+	}
+}
+
+func TestFirefoxPreferencesTurnOffFirstRunPages(t *testing.T) {
+	profile := t.TempDir()
+	if err := writeFirefoxPreferences(profile, "firefox"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(profile, "user.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "zen.welcome-screen") {
+		t.Errorf("a Firefox profile got a Zen preference: %s", data)
+	}
+	if err := writeFirefoxPreferences(profile, "zen"); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(profile, "user.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `user_pref("zen.welcome-screen.seen", true);`) {
+		t.Errorf("the Zen profile would show its welcome screen: %s", data)
+	}
+}
+
+func TestPrivateProfileUsesTheSandboxPathForAFlatpakBrowser(t *testing.T) {
+	hostRoot := filepath.Join(t.TempDir(), "data")
+	sandboxRoot := filepath.Join(t.TempDir(), ".zen")
+	b := candidate{kind: "zen", family: firefoxFamily, flatpak: &flatpakProfile{host: hostRoot, sandbox: sandboxRoot}}
+	host, sandbox, err := b.privateProfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(host) != hostRoot {
+		t.Errorf("host profile %s is not under %s", host, hostRoot)
+	}
+	if filepath.Dir(sandbox) != sandboxRoot {
+		t.Errorf("sandbox profile %s is not under %s", sandbox, sandboxRoot)
+	}
+	if filepath.Base(host) != filepath.Base(sandbox) {
+		t.Errorf("host %s and sandbox %s name different profiles", host, sandbox)
+	}
+	// The browser's temporary files never go to this app's temp directory.
+	if strings.HasPrefix(host, filepath.Join(os.TempDir(), "meiro-tmp-")) {
+		t.Errorf("host profile %s is in the app's temporary directory", host)
+	}
+}
+
+func TestSignInWindowWithoutABrowser(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	if _, ok := findBrowser(context.Background()); ok {
+		t.Skip("a browser at a fixed location cannot be hidden from PATH")
+	}
+	if _, err := SignInWindow(context.Background(), WindowOptions{}); !errors.Is(err, ErrNoBrowser) {
+		t.Errorf("err = %v, want ErrNoBrowser", err)
+	}
 }
 
 func TestWebSocketCarriesLargeMessages(t *testing.T) {
@@ -191,7 +347,7 @@ func TestYouTubeHeaderTakesTheLaterCookieOfAName(t *testing.T) {
 	}
 }
 
-func TestBrowserKindNamesTheChromiumBrowsersOfEachSystem(t *testing.T) {
+func TestBrowserKindNamesTheBrowsersOfEachSystem(t *testing.T) {
 	for id, want := range map[string]string{
 		"google-chrome.desktop":         "chrome",
 		"org.chromium.Chromium.desktop": "chromium",
@@ -201,19 +357,71 @@ func TestBrowserKindNamesTheChromiumBrowsersOfEachSystem(t *testing.T) {
 		"helium.desktop":                "helium",
 		"helium-browser.desktop":        "helium",
 		"net.imput.helium":              "helium",
-		"firefox.desktop":               "",
+		"firefox.desktop":               "firefox",
+		"org.mozilla.firefox.desktop":   "firefox",
+		"org.mozilla.firefox":           "firefox",
+		"FirefoxURL-308046B0AF4A39CB":   "firefox",
+		"app.zen_browser.zen.desktop":   "zen",
+		"zen.desktop":                   "zen",
 		"com.google.chrome":             "chrome",
 		"com.microsoft.edgemac":         "edge",
 		"com.apple.safari":              "",
 		"ChromeHTML":                    "chrome",
 		"MSEdgeHTM":                     "edge",
 		"BraveHTML":                     "brave",
-		"FirefoxURL-308046B0AF4A39CB":   "",
 		"":                              "",
 	} {
 		if got := browserKind(id); got != want {
 			t.Errorf("browserKind(%q) = %q, want %q", id, got, want)
 		}
+	}
+}
+
+func TestFlatpakZenCandidatesKeepTheirProfileInTheirDataDirectory(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the Flatpak wrapper is a Linux install")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := t.TempDir()
+	if err := os.WriteFile(filepath.Join(path, "flatpak"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", path)
+	wantHost := filepath.Join(home, ".var", "app", zenFlatpak, ".zen")
+	wantSandbox := filepath.Join(home, ".zen")
+	found := 0
+	for _, c := range firefoxCandidates() {
+		if c.flatpak == nil {
+			continue
+		}
+		found++
+		if c.kind != "zen" || c.family != firefoxFamily {
+			t.Errorf("flatpak candidate = %+v, want Zen", c)
+		}
+		if c.flatpak.host != wantHost {
+			t.Errorf("flatpak host = %s, want %s", c.flatpak.host, wantHost)
+		}
+		if c.flatpak.sandbox != wantSandbox {
+			t.Errorf("flatpak sandbox = %s, want %s", c.flatpak.sandbox, wantSandbox)
+		}
+	}
+	if found != 2 {
+		t.Errorf("found %d Flatpak Zen candidates, want 2", found)
+	}
+}
+
+func TestFirefoxProfilesSkipSignInProfiles(t *testing.T) {
+	root := t.TempDir()
+	profile := filepath.Join(root, signinProfilePrefix+"crashed")
+	if err := os.MkdirAll(profile, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profile, "cookies.sqlite"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := firefoxProfiles([]string{root}); len(got) != 0 {
+		t.Errorf("firefoxProfiles = %v, want the sign-in profile skipped", got)
 	}
 }
 
@@ -233,12 +441,17 @@ func TestMacHTTPSHandlerIsTheAppForHTTPS(t *testing.T) {
 }
 
 func TestPreferringPutsTheDefaultBrowserFirst(t *testing.T) {
-	all := []candidate{{"chrome", "a"}, {"edge", "b"}, {"brave", "c"}, {"edge", "d"}}
+	all := []candidate{
+		{kind: "chrome", path: "a"},
+		{kind: "edge", path: "b"},
+		{kind: "brave", path: "c"},
+		{kind: "edge", path: "d"},
+	}
 	got := preferring(all, "edge")
 	if want := []string{"b", "d", "a", "c"}; len(got) != 4 || got[0].path != want[0] || got[1].path != want[1] || got[2].path != want[2] || got[3].path != want[3] {
 		t.Errorf("preferring = %v, want order %v", got, want)
 	}
-	// A default that is not Chromium-based, or not installed, changes nothing.
+	// A default that is not one of these, or not installed, changes nothing.
 	if got := preferring(all, ""); got[0].path != "a" || got[3].path != "d" {
 		t.Errorf("no default changed the order: %v", got)
 	}

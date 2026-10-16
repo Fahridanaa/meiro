@@ -122,9 +122,10 @@ sees your password. When the sign-in finishes, Meiro takes the YouTube Music
 session from that window, closes it, and deletes its profile.
 
 Meiro opens the window in your system's default browser when that browser is
-Chrome, Edge, Brave, Helium, Chromium or Vivaldi. If your default browser is
-something else, such as Safari or Firefox, Meiro uses the first of those
-browsers that it finds installed.
+Chrome, Edge, Brave, Helium, Chromium, Vivaldi, Firefox or Zen. If your
+default browser is something else, such as Safari, Meiro uses the first of
+those browsers that it finds installed. Firefox and Zen need yt-dlp on PATH,
+which Meiro also needs for playback.
 
 YouTube Music has no sign-in that lets another app act for you. Meiro does not
 use an app-scoped OAuth token, so the session has the same account access as a
@@ -132,10 +133,10 @@ browser session. Treat it like a password.
 
 ### Limits of the browser window
 
-- **A Chromium-based browser must be installed.** The window needs Chrome,
-  Edge, Brave, Helium, Chromium or Vivaldi. Safari and Firefox cannot be used
-  for it, even when one of them is your default browser. If you have none of
-  the supported browsers, use one of the other ways below.
+- **A supported browser must be installed.** The window needs Chrome, Edge,
+  Brave, Helium, Chromium, Vivaldi, Firefox or Zen. Safari cannot be used for
+  it, even when it is your default browser. If you have none of the supported
+  browsers, use one of the other ways below.
 - **Google can refuse the sign-in.** Google sometimes shows "This browser or
   app may not be secure" for a browser that it thinks software controls. Meiro
   controls the window only to read the session, and it starts the window so
@@ -186,8 +187,8 @@ log before you post it.
 
 **I can't sign in.**
 - If the browser window does not open, or Google says the browser is not
-  secure, install Chrome, Edge, Brave, Helium, Chromium or Vivaldi, or use one of the
-  other ways to sign in.
+  secure, install Chrome, Edge, Brave, Helium, Chromium, Vivaldi, Firefox or
+  Zen, or use one of the other ways to sign in.
 - If you imported a session and it ended, sign in again with the browser
   window. An imported session stops working when your browser renews its
   cookies.

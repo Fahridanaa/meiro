@@ -19,7 +19,7 @@ import (
 
 // ErrNoBrowser reports that no browser the sign-in window can use is
 // installed.
-var ErrNoBrowser = errors.New("no Chrome, Edge, Brave, Helium, Vivaldi or Chromium browser was found")
+var ErrNoBrowser = errors.New("no Chrome, Edge, Brave, Helium, Vivaldi, Chromium, Firefox or Zen browser was found")
 
 // ErrWindowClosed reports that the user closed the sign-in window before the
 // sign-in finished.
@@ -41,6 +41,15 @@ type WindowOptions struct {
 	// Settle is how long the window stays open after the sign-in shows, so the
 	// page can set the rest of its cookies.
 	Settle time.Duration
+
+	// family is the family of the browser Executable names. It is
+	// chromiumFamily, the zero value, for the Chromium browser a test
+	// stands in with.
+	family browserFamily
+	// read reads the Cookie header of a Firefox-family profile. It is nil
+	// for the real sign-in, which reads the profile the way an import
+	// does, through yt-dlp; tests replace it so they need no yt-dlp.
+	read profileReader
 }
 
 // SignInWindow has the user sign in to YouTube Music in a browser window of
@@ -63,22 +72,34 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 	if options.Settle == 0 {
 		options.Settle = 3 * time.Second
 	}
-	exe := options.Executable
-	if exe == "" {
-		var ok bool
-		if exe, ok = findChromium(ctx); !ok {
-			return "", ErrNoBrowser
-		}
+	b, ok := options.browser(ctx)
+	if !ok {
+		return "", ErrNoBrowser
 	}
-	profile, err := proc.MkdirTemp("signin-")
+	read := options.read
+	if b.family == firefoxFamily && read == nil {
+		// A Firefox window is read the way an import is, through yt-dlp;
+		// say so now, while there is no window to clean up yet.
+		if _, err := proc.Tool("yt-dlp"); err != nil {
+			return "", errors.New("signing in with Firefox or Zen needs yt-dlp on PATH")
+		}
+		read = firefoxProfileCookie
+	}
+	host, arg, err := b.privateProfile()
 	if err != nil {
 		return "", err
 	}
-	defer removeAll(profile)
+	defer removeAll(host)
+
+	if b.family == firefoxFamily {
+		if err := writeFirefoxPreferences(host, b.kind); err != nil {
+			return "", err
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, SignInTimeout)
 	defer cancel()
-	cmd := proc.Command(ctx, exe, windowArgs(profile, options.URL)...)
+	cmd := proc.Command(ctx, b.path, b.windowArgs(arg, options.URL)...)
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start the browser: %w", err)
 	}
@@ -93,35 +114,80 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 		<-exited
 	}()
 
-	port, path, err := waitDebugPort(ctx, profile, exited)
+	w, err := b.open(ctx, host, exited, read)
 	if err != nil {
 		return "", err
 	}
-	ws, err := dialWS(ctx, net.JoinHostPort("127.0.0.1", port), path)
+	header, err := waitSignIn(ctx, w.read, options, exited)
 	if err != nil {
 		return "", err
 	}
-	defer ws.Close()
-	tools := &devtools{ws: ws}
-
-	header, err := waitSignIn(ctx, tools, options, exited)
-	if err != nil {
-		return "", err
-	}
-	// A polite quit lets the browser write what it holds; the cookie is read
-	// already, so a slow one is stopped by the deferred cancel.
-	closeCtx, stop := context.WithTimeout(ctx, 2*time.Second)
-	tools.closeBrowser(closeCtx)
-	stop()
+	w.quit(ctx)
 	return header, nil
 }
 
-// windowArgs are the browser's flags. The profile is new, so no first-run
-// page, default-browser prompt or keyring prompt gets in the way of the
-// sign-in. The window is not "incognito": a private window keeps its cookies
-// in a separate store the debugging port does not read by default, and this
-// profile is deleted just the same.
-func windowArgs(profile, url string) []string {
+// browser is the browser to open the sign-in window in: the executable the
+// options name, which a test stands in with, or the one found on this
+// machine.
+func (o WindowOptions) browser(ctx context.Context) (candidate, bool) {
+	if o.Executable != "" {
+		return candidate{family: o.family, path: o.Executable}, true
+	}
+	return findBrowser(ctx)
+}
+
+// firefoxProfileCookie reads a profile through yt-dlp, as an import does.
+func firefoxProfileCookie(ctx context.Context, profile string) (string, error) {
+	return ytDlpCookie(ctx, "firefox:"+profile)
+}
+
+// writeFirefoxPreferences turns off the first-run pages a fresh profile would
+// open over the sign-in page. Chromium gets the same from --no-first-run and
+// --no-default-browser-check. Zen shows a welcome screen of its own until its
+// preference is set.
+func writeFirefoxPreferences(profile, kind string) error {
+	prefs := `user_pref("browser.aboutwelcome.enabled", false);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("browser.startup.homepage_override.mstone", "ignore");
+`
+	if kind == "zen" {
+		prefs += "user_pref(\"zen.welcome-screen.seen\", true);\n"
+	}
+	return os.WriteFile(filepath.Join(profile, "user.js"), []byte(prefs), 0o600)
+}
+
+// cookieDatabaseModTime is the later modification time of a Firefox profile's
+// cookie database and its write-ahead log. The zero time means the profile has
+// neither yet.
+func cookieDatabaseModTime(profile string) time.Time {
+	var latest time.Time
+	for _, name := range []string{"cookies.sqlite", "cookies.sqlite-wal"} {
+		if info, err := os.Stat(filepath.Join(profile, name)); err == nil && info.ModTime().After(latest) {
+			latest = info.ModTime()
+		}
+	}
+	return latest
+}
+
+// windowArgs are the flags that open url on a private profile. profile is
+// the path the browser sees, not the host path.
+func (b candidate) windowArgs(profile, url string) []string {
+	switch b.family {
+	case chromiumFamily:
+		return chromiumWindowArgs(profile, url)
+	case firefoxFamily:
+		return firefoxWindowArgs(profile, url)
+	default:
+		panic("unknown browser family")
+	}
+}
+
+// chromiumWindowArgs are the browser's flags. The profile is new, so no
+// first-run page, default-browser prompt or keyring prompt gets in the way of
+// the sign-in. The window is not "incognito": a private window keeps its
+// cookies in a separate store the debugging port does not read by default,
+// and this profile is deleted just the same.
+func chromiumWindowArgs(profile, url string) []string {
 	args := []string{
 		"--user-data-dir=" + profile,
 		"--remote-debugging-port=0",
@@ -142,6 +208,105 @@ func windowArgs(profile, url string) []string {
 		args = append(args, "--use-mock-keychain")
 	}
 	return append(args, url)
+}
+
+// firefoxWindowArgs are the flags of a Firefox-family browser: a private
+// profile, and a process of its own so a browser already running does not
+// take the window over. Firefox writes no debugging port; its session is
+// read from the cookie database the profile writes.
+func firefoxWindowArgs(profile, url string) []string {
+	return []string{"-profile", profile, "-no-remote", url}
+}
+
+// privateProfile creates the throwaway profile the sign-in window opens in.
+// It returns the host path, which this app reads and deletes, and the path to
+// give the browser, which differs only for a Flatpak browser: its sandbox
+// cannot see this app's temporary directory.
+func (b candidate) privateProfile() (host, arg string, err error) {
+	if b.flatpak == nil {
+		dir, err := proc.MkdirTemp(signinProfilePrefix)
+		if err != nil {
+			return "", "", err
+		}
+		return dir, dir, nil
+	}
+	if err := os.MkdirAll(b.flatpak.host, 0o700); err != nil {
+		return "", "", err
+	}
+	proc.SweepStale(b.flatpak.host, signinProfilePrefix)
+	dir, err := os.MkdirTemp(b.flatpak.host, signinProfilePrefix)
+	if err != nil {
+		return "", "", err
+	}
+	return dir, filepath.Join(b.flatpak.sandbox, filepath.Base(dir)), nil
+}
+
+// open returns the way to read the session of a browser started on profile,
+// once it is reachable. exited closes when the browser process ends. read is
+// the Firefox-family profile reader; a Chromium window does not use it.
+func (b candidate) open(ctx context.Context, profile string, exited <-chan struct{}, read profileReader) (*browserWindow, error) {
+	switch b.family {
+	case chromiumFamily:
+		port, path, err := waitDebugPort(ctx, profile, exited)
+		if err != nil {
+			return nil, err
+		}
+		ws, err := dialWS(ctx, net.JoinHostPort("127.0.0.1", port), path)
+		if err != nil {
+			return nil, err
+		}
+		tools := &devtools{ws: ws}
+		return &browserWindow{
+			read: func(ctx context.Context) (string, error) {
+				all, err := tools.cookies(ctx)
+				if err != nil {
+					return "", err
+				}
+				if !hasSession(all) {
+					return "", nil
+				}
+				return youtubeHeader(all, time.Now()), nil
+			},
+			quit: func(ctx context.Context) {
+				// A polite quit lets the browser write what it holds; the
+				// cookie is read already, so a slow one is stopped by the
+				// deferred cancel.
+				closeCtx, stop := context.WithTimeout(ctx, 2*time.Second)
+				tools.closeBrowser(closeCtx)
+				stop()
+				_ = ws.Close()
+			},
+		}, nil
+	case firefoxFamily:
+		// The reader runs yt-dlp, which makes a request of its own, so ask
+		// it again only after the profile's cookie store changes.
+		var readAt time.Time
+		var cached string
+		return &browserWindow{
+			read: func(ctx context.Context) (string, error) {
+				changedAt := cookieDatabaseModTime(profile)
+				if changedAt.IsZero() {
+					return "", nil
+				}
+				if changedAt.After(readAt) {
+					// A window that cannot be read yet is not a closed window;
+					// its process ending is what closes it. A failed read leaves
+					// readAt alone so the next poll tries again.
+					if header, err := read(ctx, profile); err == nil {
+						readAt = changedAt
+						cached = ""
+						if strings.Contains(header, "SAPISID=") {
+							cached = header
+						}
+					}
+				}
+				return cached, nil
+			},
+			quit: func(context.Context) {},
+		}, nil
+	default:
+		panic("unknown browser family")
+	}
 }
 
 // waitDebugPort waits for the browser to say where its debugging port is.
@@ -168,25 +333,26 @@ func waitDebugPort(ctx context.Context, profile string, exited <-chan struct{}) 
 	}
 }
 
-// waitSignIn polls the window's cookies until a session shows, then lets the
-// page settle and reads them again.
-func waitSignIn(ctx context.Context, tools *devtools, options WindowOptions, exited <-chan struct{}) (string, error) {
+// waitSignIn polls the window's session until a signed-in one shows and stays
+// for the settle time, then returns that Cookie header.
+func waitSignIn(ctx context.Context, read func(context.Context) (string, error), options WindowOptions, exited <-chan struct{}) (string, error) {
 	var signedAt time.Time
 	for {
-		all, err := tools.cookies(ctx)
+		header, err := read(ctx)
 		switch {
 		case err != nil && ctx.Err() != nil:
 			return "", windowContextError(ctx)
 		case err != nil:
-			// The connection drops when the user closes the window.
+			// The connection drops when the user closes a Chromium window;
+			// the Firefox reader reports no error.
 			return "", ErrWindowClosed
 		}
-		if hasSession(all) {
+		if header != "" {
 			if signedAt.IsZero() {
 				signedAt = time.Now()
 			}
 			if time.Since(signedAt) >= options.Settle {
-				return youtubeHeader(all, time.Now()), nil
+				return header, nil
 			}
 		}
 		select {
@@ -227,36 +393,149 @@ func removeAll(dir string) {
 	}
 }
 
-// candidate is a Chromium-based browser that may be installed, named by the
-// kind of browser it is.
-type candidate struct {
-	kind string
-	// path is an absolute path, or a command to find on PATH.
-	path string
+// browserFamily tells how the sign-in window reads the session of a browser.
+type browserFamily uint8
+
+const (
+	// chromiumFamily reads the session over the Chrome DevTools Protocol.
+	chromiumFamily browserFamily = iota
+	// firefoxFamily reads the session from the browser's cookie store, the
+	// same way importing from Firefox does.
+	firefoxFamily
+)
+
+// profileReader reads the Cookie header of a Firefox-family profile.
+type profileReader func(ctx context.Context, profile string) (string, error)
+
+// flatpakProfile is how a Flatpak browser's sandbox sees the data directory
+// its private profiles are made in. Flatpak does not share this app's
+// temporary directory, and it renames the persisted directory; both facts
+// live here, where discovery sets them.
+type flatpakProfile struct {
+	// host is the host directory the private profile is created under.
+	host string
+	// sandbox is the directory the sandbox shows host at.
+	sandbox string
 }
 
-// findChromium is the Chromium-based browser to open the sign-in window in:
-// the user's default browser when it is one, and otherwise the first one
-// installed. Firefox and Safari are not offered: the sign-in reads the
-// session over Chrome's debugging protocol.
-func findChromium(ctx context.Context) (string, bool) {
-	for _, c := range preferring(chromiumCandidates(), defaultBrowserKind(ctx)) {
-		if filepath.IsAbs(c.path) {
-			if info, err := os.Stat(c.path); err == nil && !info.IsDir() {
-				return c.path, true
-			}
-			continue
-		}
-		if path, err := exec.LookPath(c.path); err == nil {
-			return path, true
+// browserWindow is a started sign-in window whose session can be read.
+type browserWindow struct {
+	// read returns the Cookie header of the session the window holds, ""
+	// while the user is not signed in. An error means the window cannot be
+	// reached, which is how a Chromium window the user closed shows.
+	read func(ctx context.Context) (string, error)
+	// quit lets the browser close politely before the deferred cancel stops
+	// it. A browser with no remote close does nothing here.
+	quit func(ctx context.Context)
+}
+
+// candidate is a browser that may open the sign-in window.
+type candidate struct {
+	// kind names the browser for default-browser preference.
+	kind string
+	// family tells how its session is read.
+	family browserFamily
+	// path is an absolute path, or a command to find on PATH.
+	path string
+	// flatpak is set when the browser runs in a Flatpak sandbox. nil means
+	// the browser sees the app's temporary directory, which is what a
+	// normal install gets.
+	flatpak *flatpakProfile
+}
+
+// findBrowser is the browser to open the sign-in window in: the user's
+// default browser when it is one of these, and otherwise the first installed.
+func findBrowser(ctx context.Context) (candidate, bool) {
+	for _, c := range preferring(browserCandidates(), defaultBrowserKind(ctx)) {
+		if c.installed() {
+			return c, true
 		}
 	}
-	return "", false
+	return candidate{}, false
+}
+
+// browserCandidates lists the browsers of this system, Chromium-based ones
+// first so a machine with no readable default keeps the browser it used
+// before.
+func browserCandidates() []candidate {
+	return append(chromiumCandidates(), firefoxCandidates()...)
+}
+
+// installed reports whether the browser is on this machine. An absolute path
+// is checked as it is; anything else is a command on PATH.
+func (b candidate) installed() bool {
+	if filepath.IsAbs(b.path) {
+		info, err := os.Stat(b.path)
+		return err == nil && !info.IsDir()
+	}
+	_, err := exec.LookPath(b.path)
+	return err == nil
+}
+
+// firefoxCandidates lists the Firefox-family browsers of this system. A
+// Flatpak browser needs more than its path: its exported command is what this
+// app runs, but its private profile goes under the data directory the sandbox
+// exposes, and the browser is told the sandbox path.
+func firefoxCandidates() []candidate {
+	home, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		home = ""
+	}
+	var out []candidate
+	switch runtime.GOOS {
+	case "darwin":
+		apps := []string{"/Applications"}
+		if home != "" {
+			apps = append(apps, filepath.Join(home, "Applications"))
+		}
+		for _, dir := range apps {
+			out = append(out,
+				candidate{kind: "firefox", family: firefoxFamily, path: filepath.Join(dir, "Firefox.app", "Contents", "MacOS", "firefox")},
+				candidate{kind: "zen", family: firefoxFamily, path: filepath.Join(dir, "Zen.app", "Contents", "MacOS", "zen")},
+			)
+		}
+	case "windows":
+		for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
+			root := os.Getenv(env)
+			if root == "" {
+				continue
+			}
+			out = append(out, candidate{kind: "firefox", family: firefoxFamily, path: filepath.Join(root, "Mozilla Firefox", "firefox.exe")})
+		}
+	default:
+		out = append(out,
+			candidate{kind: "firefox", family: firefoxFamily, path: "firefox"},
+			candidate{kind: "zen", family: firefoxFamily, path: "zen"},
+			candidate{kind: "zen", family: firefoxFamily, path: "zen-browser"},
+		)
+		if home == "" {
+			break
+		}
+		// The exported wrapper runs flatpak, so it is only usable while the
+		// CLI is installed.
+		if _, err := exec.LookPath("flatpak"); err != nil {
+			break
+		}
+		for _, exports := range []string{
+			filepath.Join(home, ".local", "share", "flatpak", "exports", "bin"),
+			"/var/lib/flatpak/exports/bin",
+		} {
+			out = append(out, candidate{
+				kind: "zen", family: firefoxFamily,
+				path: filepath.Join(exports, zenFlatpak),
+				flatpak: &flatpakProfile{
+					host:    filepath.Join(home, ".var", "app", zenFlatpak, ".zen"),
+					sandbox: filepath.Join(home, ".zen"),
+				},
+			})
+		}
+	}
+	return out
 }
 
 // preferring moves the candidates of one kind of browser to the front. The
 // others keep their order, so a default browser that is not installed in a
-// form this finds, or is not Chromium-based, still leaves a browser to use.
+// form this finds, or is not one of these, still leaves a browser to use.
 func preferring(all []candidate, kind string) []candidate {
 	if kind == "" {
 		return all
@@ -275,8 +554,8 @@ func preferring(all []candidate, kind string) []candidate {
 	return out
 }
 
-// browserKind names the Chromium-based browser an identifier belongs to, or
-// "" for any other. The identifier is whatever the system calls its default
+// browserKind names the browser an identifier belongs to, or "" for one this
+// app cannot drive. The identifier is whatever the system calls its default
 // browser: a desktop file on Linux ("google-chrome.desktop"), a bundle ID on
 // macOS ("com.google.chrome") or a ProgID on Windows ("ChromeHTML").
 func browserKind(id string) string {
@@ -290,6 +569,8 @@ func browserKind(id string) string {
 		{"brave", "brave"},
 		{"vivaldi", "vivaldi"},
 		{"helium", "helium"},
+		{"firefox", "firefox"},
+		{"zen", "zen"},
 	} {
 		if strings.Contains(id, kind.mark) {
 			return kind.kind
@@ -299,8 +580,8 @@ func browserKind(id string) string {
 }
 
 // defaultBrowserKind asks the system which browser the user chose to open
-// links, and names its kind when it is Chromium-based. It gives "" when the
-// default is another browser or cannot be read.
+// links, and names its kind when the sign-in window can use it. It gives ""
+// when the default is another browser or cannot be read.
 func defaultBrowserKind(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
@@ -373,7 +654,7 @@ func chromiumCandidates() []candidate {
 				{"vivaldi", "Vivaldi"},
 				{"helium", "Helium"},
 			} {
-				out = append(out, candidate{b.kind, filepath.Join(apps, b.name+".app", "Contents", "MacOS", b.name)})
+				out = append(out, candidate{kind: b.kind, path: filepath.Join(apps, b.name+".app", "Contents", "MacOS", b.name)})
 			}
 		}
 		return out
@@ -385,33 +666,33 @@ func chromiumCandidates() []candidate {
 				continue
 			}
 			out = append(out,
-				candidate{"chrome", filepath.Join(root, "Google", "Chrome", "Application", "chrome.exe")},
-				candidate{"edge", filepath.Join(root, "Microsoft", "Edge", "Application", "msedge.exe")},
-				candidate{"brave", filepath.Join(root, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")},
-				candidate{"chromium", filepath.Join(root, "Chromium", "Application", "chrome.exe")},
-				candidate{"vivaldi", filepath.Join(root, "Vivaldi", "Application", "vivaldi.exe")},
+				candidate{kind: "chrome", path: filepath.Join(root, "Google", "Chrome", "Application", "chrome.exe")},
+				candidate{kind: "edge", path: filepath.Join(root, "Microsoft", "Edge", "Application", "msedge.exe")},
+				candidate{kind: "brave", path: filepath.Join(root, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")},
+				candidate{kind: "chromium", path: filepath.Join(root, "Chromium", "Application", "chrome.exe")},
+				candidate{kind: "vivaldi", path: filepath.Join(root, "Vivaldi", "Application", "vivaldi.exe")},
 				// Helium's folder is a best guess; it is not checked on a
 				// Windows machine.
-				candidate{"helium", filepath.Join(root, "imput", "Helium", "Application", "chrome.exe")},
-				candidate{"helium", filepath.Join(root, "Helium", "Application", "chrome.exe")})
+				candidate{kind: "helium", path: filepath.Join(root, "imput", "Helium", "Application", "chrome.exe")},
+				candidate{kind: "helium", path: filepath.Join(root, "Helium", "Application", "chrome.exe")})
 		}
 		return out
 	default:
 		return []candidate{
-			{"chrome", "google-chrome"},
-			{"chrome", "google-chrome-stable"},
-			{"chromium", "chromium"},
-			{"chromium", "chromium-browser"},
-			{"edge", "microsoft-edge"},
-			{"edge", "microsoft-edge-stable"},
-			{"brave", "brave-browser"},
-			{"brave", "brave"},
-			{"vivaldi", "vivaldi"},
-			{"vivaldi", "vivaldi-stable"},
+			{kind: "chrome", path: "google-chrome"},
+			{kind: "chrome", path: "google-chrome-stable"},
+			{kind: "chromium", path: "chromium"},
+			{kind: "chromium", path: "chromium-browser"},
+			{kind: "edge", path: "microsoft-edge"},
+			{kind: "edge", path: "microsoft-edge-stable"},
+			{kind: "brave", path: "brave-browser"},
+			{kind: "brave", path: "brave"},
+			{kind: "vivaldi", path: "vivaldi"},
+			{kind: "vivaldi", path: "vivaldi-stable"},
 			// Helium's own packages name the command helium, the AUR one
 			// helium-browser.
-			{"helium", "helium"},
-			{"helium", "helium-browser"},
+			{kind: "helium", path: "helium"},
+			{kind: "helium", path: "helium-browser"},
 		}
 	}
 }
