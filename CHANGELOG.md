@@ -10,6 +10,12 @@ and this project adheres to
 
 ### Added
 
+- **Firefox and Zen sign in with a browser window.** Account setup now opens
+  a separate Firefox or Zen window with a temporary profile when one of those
+  is the default browser, or when it is the one installed. Native, Flatpak and
+  Snap installs all work, because the profile is created in the data directory
+  the browser's sandbox sees. Meiro reads the session from that profile the
+  way an import does, closes the window, and deletes the profile.
 - **Synced lyrics.** The Lyrics tab now shows timed lyrics, from YouTube Music
   when it has them and from LRCLIB otherwise. The line being sung is lit and
   glides to the middle as the song plays, lines fade the further they are from
@@ -22,6 +28,25 @@ and this project adheres to
 
 ### Fixed
 
+- **A Firefox or Zen sign-in finds the session it just made.** Firefox keeps
+  a fresh cookie in a write-ahead log, and the sign-in read only the main
+  database, so a finished sign-in could look signed out. The window now makes
+  Firefox checkpoint the cookie at once.
+- **A Firefox or Zen sign-in falls back to a Chromium browser without
+  yt-dlp.** Reading a Firefox profile needs yt-dlp. Without it, the window
+  opens in a Chromium-based browser instead of failing.
+- **A removed Flatpak or Snap install no longer hides a native browser.** An
+  export or snap link can outlive an uninstall and win over the browser
+  actually installed. The sign-in now asks the package manager whether the
+  install is still there.
+- **The fallback order is the same on every platform.** When the default
+  browser is not one Meiro drives, the window opens in the first
+  Chromium-based browser Meiro knows, on Windows and macOS too. A user
+  Flatpak install under a custom `XDG_DATA_HOME` is found as well.
+- **A Zen Flatpak install shows its session in the import menu.** The menu
+  searched a directory Zen never writes, so a session in a Flatpak Zen was
+  missing from the list. It now finds the profiles in the directory Flatpak
+  persists, `~/.var/app/app.zen_browser.zen/.zen`.
 - **The menu button no longer slides.** When the side menu opens or closes,
   the button stays above the icons instead of drifting while the menu grows.
 - **Small buttons are easier to hit.** Icon buttons, chips, switches and

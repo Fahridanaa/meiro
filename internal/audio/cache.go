@@ -398,7 +398,7 @@ type cachedFile struct {
 // when the cache is created, so later lookups and evictions need no directory
 // scan. The caller holds c.mu.
 func (c *Cache) scanLocked() {
-	proc.SweepStale(c.dir, tempPrefix)
+	proc.SweepStale(c.dir, nil, tempPrefix)
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {
 		return

@@ -26,4 +26,5 @@ go_test(
         "window_test.go",
     ],
     embed = [":cookies"],
+    deps = ["//internal/proc"],
 )

@@ -268,6 +268,14 @@ func firefoxProfileRoots(home, config, goos string) []string {
 	return uniquePaths(roots)
 }
 
+// zenFlatpak is the Flatpak application ID of Zen. Flatpak maps the
+// sandbox's ~/.zen to the host's ~/.var/app/<id>/.zen.
+const zenFlatpak = "app.zen_browser.zen"
+
+// signinProfilePrefix names the throwaway profiles the sign-in window makes,
+// so an import never offers a leftover one of them as a browser session.
+const signinProfilePrefix = "signin-"
+
 // zenProfileRoots lists the data roots Zen uses on each desktop platform.
 func zenProfileRoots(home, config, goos string) []string {
 	var roots []string
@@ -275,7 +283,7 @@ func zenProfileRoots(home, config, goos string) []string {
 	case "linux":
 		roots = append(roots,
 			filepath.Join(home, ".zen"),
-			filepath.Join(home, ".var", "app", "app.zen_browser.zen", "zen"),
+			filepath.Join(home, ".var", "app", zenFlatpak, ".zen"),
 		)
 	case "darwin":
 		roots = append(roots, filepath.Join(home, "Library", "Application Support", "zen"))
@@ -302,7 +310,7 @@ func firefoxProfiles(roots []string) []string {
 				continue
 			}
 			for _, entry := range entries {
-				if !entry.IsDir() {
+				if !entry.IsDir() || strings.HasPrefix(entry.Name(), signinProfilePrefix) {
 					continue
 				}
 				profile := filepath.Join(base, entry.Name())

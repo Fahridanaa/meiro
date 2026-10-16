@@ -95,9 +95,10 @@ func CreateTemp(pattern string) (*os.File, error) {
 }
 
 // SweepStale removes entries of dir that are older than StaleAge and whose
-// name starts with one of prefixes. Newer entries belong to work that may
-// still be running, possibly in another process.
-func SweepStale(dir string, prefixes ...string) {
+// name starts with one of prefixes. keep, when set, reports an entry that
+// must stay even when it is old. Newer entries belong to work that may still
+// be running, possibly in another process.
+func SweepStale(dir string, keep func(path string) bool, prefixes ...string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return
@@ -117,7 +118,11 @@ func SweepStale(dir string, prefixes ...string) {
 		if err != nil || time.Since(info.ModTime()) < StaleAge {
 			continue
 		}
-		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+		path := filepath.Join(dir, entry.Name())
+		if keep != nil && keep(path) {
+			continue
+		}
+		if err := os.RemoveAll(path); err != nil {
 			log.Printf("removing stale %s: %v", entry.Name(), err)
 		}
 	}
@@ -127,6 +132,6 @@ func SweepStale(dir string, prefixes ...string) {
 // temporary directory.
 func SweepTemp() {
 	if root, err := tempRoot(); err == nil {
-		SweepStale(root, "")
+		SweepStale(root, nil, "")
 	}
 }
