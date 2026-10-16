@@ -175,6 +175,11 @@ if [[ "$minimal" == true ]]; then
 		"$out/bin/ffmpeg.exe" "$out/bin/yt-dlp.exe" "$out/bin/qjs.exe" \
 		"$out/bin/qjs" "$out/bin/.ffmpeg.stamp" "$out/bin/.yt-dlp.sha256" \
 		"$out/licenses/ffmpeg-COPYING.LGPLv3" "$out/licenses/quickjs-MIT.txt"
+	# MyGo's Windows installer copies everything in bin/ and fails on an empty
+	# one, which is what a minimal build has.
+	if [[ "$platform" == windows-* ]]; then
+		printf 'Meiro finds ffmpeg, yt-dlp and a JavaScript runtime on PATH.\n' >"$out/bin/README.txt"
+	fi
 	echo "ready in ${out}"
 	exit 0
 fi
