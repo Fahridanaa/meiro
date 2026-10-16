@@ -23,7 +23,7 @@ var ErrNoBrowser = errors.New("no Chrome, Edge, Brave, Helium, Vivaldi, Chromium
 
 // errFirefoxNeedsYtDlp reports that a Firefox or Zen browser is installed,
 // but yt-dlp is missing, so its session cannot be read.
-var errFirefoxNeedsYtDlp = errors.New("signing in with Firefox or Zen needs yt-dlp on PATH")
+var errFirefoxNeedsYtDlp = errors.New("signing in with Firefox or Zen needs yt-dlp")
 
 // ErrWindowClosed reports that the user closed the sign-in window before the
 // sign-in finished.
@@ -343,8 +343,9 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 			},
 		}, nil
 	case firefoxFamily:
-		// The reader runs yt-dlp, which makes a request of its own, so ask
-		// it again only after the profile's cookie store changes.
+		// The reader runs yt-dlp, which makes a request of its own, so it
+		// runs only when the profile's cookie store changes and, while no
+		// session is cached, after the recheck time.
 		var readAt time.Time
 		var readTime time.Time
 		var failedAt time.Time
@@ -526,15 +527,6 @@ type browserWindow struct {
 	quit func(ctx context.Context)
 }
 
-// installKind is how a browser is installed on this machine.
-type installKind uint8
-
-const (
-	installNative installKind = iota
-	installFlatpak
-	installSnap
-)
-
 // candidate is a browser that may open the sign-in window.
 type candidate struct {
 	// kind names the browser for default-browser preference.
@@ -549,11 +541,9 @@ type candidate struct {
 	// Flatpak mounts ~/.var/app/<id> and Snap ~/snap/<name> at the same path
 	// on both sides.
 	profileRoot string
-	// install is how this browser is installed.
-	install installKind
-	// appID is the Flatpak application ID or Snap name, "" for a native
-	// install.
-	appID string
+	// flatpakID and snapName name a packaged install, "" for a native one.
+	flatpakID string
+	snapName  string
 	// desktopID is the .desktop file of this install on Linux, "" for a
 	// native one. Flatpak exports <flatpakID>.desktop, Snap
 	// <snapName>_<snapName>.desktop.
@@ -617,12 +607,11 @@ func (b candidate) installed(ctx context.Context) bool {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	switch b.install {
-	case installFlatpak:
-		return proc.Command(ctx, "flatpak", "info", b.appID).Run() == nil
-	case installSnap:
-		return proc.Command(ctx, "snap", "list", b.appID).Run() == nil
-	case installNative:
+	switch {
+	case b.flatpakID != "":
+		return proc.Command(ctx, "flatpak", "info", b.flatpakID).Run() == nil
+	case b.snapName != "":
+		return proc.Command(ctx, "snap", "list", b.snapName).Run() == nil
 	}
 	return true
 }
@@ -733,7 +722,7 @@ func macHTTPSHandler(prefs []byte) string {
 		return ""
 	}
 	for _, h := range parsed.Handlers {
-		if h.Scheme == "https" {
+		if h.Scheme == "https" && h.App != "" {
 			return h.App
 		}
 	}
@@ -830,54 +819,59 @@ func browserTable() []browserSpec {
 // The Flatpak and Snap tools gate their candidates, so a machine without
 // them, and a test with an empty PATH, sees neither install kind.
 func linuxCandidates(table []browserSpec) []candidate {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = ""
+	}
+	userExports := ""
+	if home != "" {
+		userExports = filepath.Join(userDataHome(home), "flatpak", "exports", "bin")
+	}
+	_, flatpakErr := exec.LookPath("flatpak")
+	_, snapErr := exec.LookPath("snap")
+	hasFlatpak := flatpakErr == nil
+	hasSnap := snapErr == nil
 	var out []candidate
 	for _, spec := range table {
 		for _, command := range spec.commands {
 			out = append(out, candidate{kind: spec.kind, family: spec.family, path: command})
 		}
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return out
-	}
-	if _, err := exec.LookPath("flatpak"); err == nil {
-		for _, spec := range table {
-			if spec.flatpakID == "" {
-				continue
-			}
-			for _, root := range []string{
-				filepath.Join(home, ".local", "share", "flatpak", "exports", "bin"),
-				"/var/lib/flatpak/exports/bin",
-			} {
+		if home == "" {
+			continue
+		}
+		if hasFlatpak && spec.flatpakID != "" {
+			for _, root := range []string{userExports, "/var/lib/flatpak/exports/bin"} {
 				out = append(out, candidate{
 					kind:        spec.kind,
 					family:      spec.family,
 					path:        filepath.Join(root, spec.flatpakID),
 					profileRoot: filepath.Join(home, ".var", "app", spec.flatpakID, "data"),
 					desktopID:   strings.ToLower(spec.flatpakID) + ".desktop",
-					install:     installFlatpak,
-					appID:       spec.flatpakID,
+					flatpakID:   spec.flatpakID,
 				})
 			}
 		}
-	}
-	if _, err := exec.LookPath("snap"); err == nil {
-		for _, spec := range table {
-			if spec.snapName == "" {
-				continue
-			}
+		if hasSnap && spec.snapName != "" {
 			out = append(out, candidate{
 				kind:        spec.kind,
 				family:      spec.family,
 				path:        filepath.Join("/snap/bin", spec.snapName),
 				profileRoot: filepath.Join(home, "snap", spec.snapName, "common"),
 				desktopID:   strings.ToLower(spec.snapName+"_"+spec.snapName) + ".desktop",
-				install:     installSnap,
-				appID:       spec.snapName,
+				snapName:    spec.snapName,
 			})
 		}
 	}
 	return out
+}
+
+// userDataHome is the directory Flatpak names XDG_DATA_HOME: its own variable
+// when set, and the ~/.local/share default otherwise.
+func userDataHome(home string) string {
+	if data := os.Getenv("XDG_DATA_HOME"); data != "" {
+		return data
+	}
+	return filepath.Join(home, ".local", "share")
 }
 
 // darwinCandidates builds the app bundle install of every row under each
@@ -888,12 +882,12 @@ func darwinCandidates(table []browserSpec) []candidate {
 		roots = append(roots, filepath.Join(home, "Applications"))
 	}
 	var out []candidate
-	for _, root := range roots {
-		for _, spec := range table {
-			binary := spec.macExec
-			if binary == "" {
-				binary = spec.macApp
-			}
+	for _, spec := range table {
+		binary := spec.macExec
+		if binary == "" {
+			binary = spec.macApp
+		}
+		for _, root := range roots {
 			out = append(out, candidate{
 				kind:   spec.kind,
 				family: spec.family,
@@ -908,12 +902,12 @@ func darwinCandidates(table []browserSpec) []candidate {
 // install root.
 func windowsCandidates(table []browserSpec) []candidate {
 	var out []candidate
-	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
-		root := os.Getenv(env)
-		if root == "" {
-			continue
-		}
-		for _, spec := range table {
+	for _, spec := range table {
+		for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
+			root := os.Getenv(env)
+			if root == "" {
+				continue
+			}
 			for _, path := range spec.winPaths {
 				out = append(out, candidate{
 					kind:   spec.kind,

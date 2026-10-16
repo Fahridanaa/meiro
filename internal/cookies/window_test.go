@@ -613,6 +613,7 @@ func TestFindBrowserTakesTheFlatpakInstallTheDefaultNames(t *testing.T) {
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", "")
 	bin := t.TempDir()
 	t.Setenv("PATH", bin)
 	for name, body := range map[string]string{
@@ -650,6 +651,7 @@ func TestFindBrowserSkipsAnUninstalledFlatpakApp(t *testing.T) {
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", "")
 	bin := t.TempDir()
 	t.Setenv("PATH", bin)
 	for name, body := range map[string]string{
@@ -676,8 +678,8 @@ func TestFindBrowserSkipsAnUninstalledFlatpakApp(t *testing.T) {
 	if b.path != "firefox" {
 		t.Errorf("findBrowser picked %s, want the native firefox", b.path)
 	}
-	if b.install != installNative {
-		t.Errorf("findBrowser picked an install of kind %v, want native", b.install)
+	if b.flatpakID != "" || b.snapName != "" {
+		t.Errorf("findBrowser picked a packaged install %+v, want native", b)
 	}
 }
 
@@ -702,8 +704,8 @@ func TestInstalledAsksThePackageManager(t *testing.T) {
 	if err := os.WriteFile(path, nil, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	flatpak := candidate{path: path, install: installFlatpak, appID: "org.mozilla.firefox"}
-	snap := candidate{path: path, install: installSnap, appID: "firefox"}
+	flatpak := candidate{path: path, flatpakID: "org.mozilla.firefox"}
+	snap := candidate{path: path, snapName: "firefox"}
 
 	if !flatpak.installed(context.Background()) || !snap.installed(context.Background()) {
 		t.Error("an install the package manager reports is not installed")
@@ -809,6 +811,7 @@ func TestLinuxCandidatesCoverNativeFlatpakAndSnapInstalls(t *testing.T) {
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", "")
 	bin := t.TempDir()
 	for _, name := range []string{"flatpak", "snap"} {
 		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o700); err != nil {
@@ -918,6 +921,79 @@ func TestLinuxCandidatesNeedTheFlatpakAndSnapTools(t *testing.T) {
 	}
 }
 
+// TestLinuxCandidatesUseXDGDataHome checks a user Flatpak install under a
+// custom XDG_DATA_HOME is found at the path Flatpak actually uses.
+func TestLinuxCandidatesUseXDGDataHome(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Flatpak user exports are Linux")
+	}
+	home := t.TempDir()
+	data := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", data)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "flatpak"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	export := filepath.Join(data, "flatpak", "exports", "bin", "org.mozilla.firefox")
+	for _, c := range linuxCandidates(browserTable()) {
+		if c.path != export {
+			continue
+		}
+		if want := filepath.Join(home, ".var", "app", "org.mozilla.firefox", "data"); c.profileRoot != want {
+			t.Errorf("profileRoot = %s, want %s", c.profileRoot, want)
+		}
+		return
+	}
+	t.Errorf("no Flatpak candidate at %s", export)
+}
+
+// TestDarwinAndWindowsCandidatesKeepTheTableOrder checks the fallback order
+// the browserCandidates comment promises: the Chromium-based rows come first,
+// whatever install root a browser lives in.
+func TestDarwinAndWindowsCandidatesKeepTheTableOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		build func([]browserSpec) []candidate
+		env   func(*testing.T)
+	}{
+		{"darwin", darwinCandidates, func(t *testing.T) {
+			t.Setenv("HOME", t.TempDir())
+		}},
+		{"windows", windowsCandidates, func(t *testing.T) {
+			t.Setenv("ProgramFiles", t.TempDir())
+			t.Setenv("ProgramFiles(x86)", t.TempDir())
+			t.Setenv("LocalAppData", t.TempDir())
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.env(t)
+			table := browserTable()
+			rank := map[string]int{}
+			for i, spec := range table {
+				rank[spec.kind] = i
+			}
+			last := 0
+			seenFirefox := false
+			for _, c := range tc.build(table) {
+				if rank[c.kind] < last {
+					t.Fatalf("%s is out of table order", c.path)
+				}
+				last = rank[c.kind]
+				if c.family == firefoxFamily {
+					seenFirefox = true
+					continue
+				}
+				if seenFirefox {
+					t.Fatalf("Chromium-family %s follows a Firefox-family candidate", c.path)
+				}
+			}
+		})
+	}
+}
+
 func TestFirefoxProfilesSkipSignInProfiles(t *testing.T) {
 	root := t.TempDir()
 	profile := filepath.Join(root, signinProfilePrefix+"crashed")
@@ -941,6 +1017,10 @@ func TestMacHTTPSHandlerIsTheAppForHTTPS(t *testing.T) {
 	}
 	if got := macHTTPSHandler([]byte(`{"LSHandlers":[]}`)); got != "" {
 		t.Errorf("no choice gave %q", got)
+	}
+	empty := `{"LSHandlers":[{"LSHandlerURLScheme":"https"},{"LSHandlerURLScheme":"https","LSHandlerRoleAll":"com.google.chrome"}]}`
+	if got := macHTTPSHandler([]byte(empty)); got != "com.google.chrome" {
+		t.Errorf("handler with an empty first entry = %q", got)
 	}
 	if got := macHTTPSHandler([]byte("not json")); got != "" {
 		t.Errorf("bad input gave %q", got)

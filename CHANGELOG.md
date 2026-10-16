@@ -39,6 +39,10 @@ and this project adheres to
   export or snap link can outlive an uninstall and win over the browser
   actually installed. The sign-in now asks the package manager whether the
   install is still there.
+- **The sign-in picks the same browser on every platform.** When the default
+  browser is not one Meiro drives, the window opens in the first
+  Chromium-based browser Meiro knows, on Windows and macOS too. A user
+  Flatpak install under a custom `XDG_DATA_HOME` is found as well.
 - **A Zen Flatpak install shows its session in the import menu.** The menu
   searched a directory Zen never writes, so a session in a Flatpak Zen was
   missing from the list. It now finds the profiles in the directory Flatpak
