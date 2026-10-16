@@ -11,7 +11,7 @@ import (
 // the switch turns it on, and a preset writes its bands and sends them to
 // the player.
 func TestTheSoundCardSwitchAndPreset(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 4000)
 	tt.Frame()

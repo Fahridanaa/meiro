@@ -89,7 +89,7 @@ func (r *resolved) asked(videoID string) bool {
 // what the app decides. TestPlayingATrackThroughToTheEnd plays real audio.
 func playbackApp(t *testing.T) (*app, *resolved) {
 	t.Helper()
-	a := newTestApp()
+	a := newTestApp(t)
 	a.settings.AutoPlay = false
 	r := &resolved{err: map[string]error{}}
 	a.streams = audio.NewURLs(r.resolve)
@@ -418,7 +418,7 @@ func TestLoudnessSurvivesTheStreamResolving(t *testing.T) {
 }
 
 func TestPlaybackSettingsContainNormalizationOutsideCacheCard(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 4000)
 	tt.Frame()

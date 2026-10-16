@@ -18,7 +18,7 @@ import (
 // benchfixture_test.go, and whose tracks never resolve, so no ffmpeg runs.
 func benchApp(b *testing.B) *app {
 	b.Helper()
-	a := newTestApp()
+	a := newTestApp(b)
 	client := func(auth *youtube.CookieAuth) *youtube.Client {
 		return youtube.NewClient(youtube.Options{APIKey: "test", HTTPClient: &http.Client{Transport: benchMusic{}}, CookieAuth: auth})
 	}
@@ -28,7 +28,9 @@ func benchApp(b *testing.B) *app {
 		b.Fatal(err)
 	}
 	a.account.session = &session{client: client(auth), cookie: "SAPISID=bench"}
+	a.thumbs.Close()
 	a.thumbs = artwork.New(&http.Client{Transport: benchNoArtwork{}}, func() {})
+	b.Cleanup(a.thumbs.Close)
 	a.settings.AutoPlay = false
 	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
 		return "", 0, errors.New("bench")

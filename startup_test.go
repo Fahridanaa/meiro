@@ -93,7 +93,7 @@ func BenchmarkStartup(b *testing.B) {
 					b.Fatal(err)
 				}
 				lap()
-				a := newTestApp()
+				a := newTestApp(b)
 				lap()
 				// Background work runs off the main thread, as it does in the
 				// app; newTestApp runs it inline.

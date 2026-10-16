@@ -29,7 +29,7 @@ import (
 // signedInApp is an app whose account client speaks for a saved session.
 func signedInApp(t *testing.T) *app {
 	t.Helper()
-	a := newTestApp()
+	a := newTestApp(t)
 	auth, err := youtube.NewCookieAuth("SAPISID=test", youtube.CookieOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestEveryPageLoadsAndDraws(t *testing.T) {
 	}
 	for _, page := range pages {
 		t.Run(page.path, func(t *testing.T) {
-			a := newTestApp()
+			a := newTestApp(t)
 			a.router.Push(page.path)
 			tt := ui.NewTester(a.view, 1000, 700)
 			tt.Frame()
@@ -70,7 +70,7 @@ func TestEveryPageLoadsAndDraws(t *testing.T) {
 }
 
 func TestSearchFlow(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/search")
 	tt := ui.NewTester(a.view, 1000, 700)
 	searches.Store(0)
@@ -121,7 +121,7 @@ func TestSearchFlow(t *testing.T) {
 // and anything that opens a page offers that. The panel stays open, and a
 // right click must not also choose the item under the menu.
 func TestRightClickingASuggestionOffersItsMenu(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/search")
 	tt := ui.NewTester(a.view, 1000, 700)
 	searches.Store(0)
@@ -189,7 +189,7 @@ func TestRightClickingASuggestionOffersItsMenu(t *testing.T) {
 // The search field is in the top bar of every page, and submitting it there
 // shows the search page with what it ran.
 func TestSearchingFromAnotherPage(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 700)
 	searches.Store(0)
@@ -214,7 +214,7 @@ func TestSearchingFromAnotherPage(t *testing.T) {
 // A search shows the filters YouTube offers for it, without one of the app's
 // own, and each one searches the query again with the parameters it carries.
 func TestSearchShowsYouTubesFilters(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/search")
 	a.runSearch("yor", "")
 	tt := ui.NewTester(a.view, 1000, 700)
@@ -244,7 +244,7 @@ func TestSearchShowsYouTubesFilters(t *testing.T) {
 // The card a search leads with names what the search found, and selecting it
 // opens that page.
 func TestSearchLeadsWithItsTopResult(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/search")
 	a.runSearch("yor", "")
 	tt := ui.NewTester(a.view, 1000, 700)
@@ -267,7 +267,7 @@ func TestSearchLeadsWithItsTopResult(t *testing.T) {
 // A search shows the pages of its results itself as its list reaches the end of
 // what it has, rather than offering the button that asks.
 func TestSearchLoadsTheNextPageItself(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/search")
 	a.runSearch("yor", "")
 	searchesMore.Store(0)
@@ -623,7 +623,7 @@ func TestAPlaylistPageCanBeSearched(t *testing.T) {
 }
 
 func TestBrowsingFromHomeIntoAnAlbum(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/home")
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
@@ -638,7 +638,7 @@ func TestBrowsingFromHomeIntoAnAlbum(t *testing.T) {
 
 func TestSettingsPersistAcrossRestarts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
-	a := newTestApp()
+	a := newTestApp(t)
 	a.saver.Path = path
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 900)
@@ -651,7 +651,7 @@ func TestSettingsPersistAcrossRestarts(t *testing.T) {
 	a.saver.Save(&a.settings)
 	a.saver.Wait()
 
-	restarted := newTestApp()
+	restarted := newTestApp(t)
 	restarted.settings = settings.Load(path)
 	if restarted.settings.Mode != "dark" || restarted.settings.Seed != "#d81b78" {
 		t.Errorf("settings came back as %+v", restarted.settings)
@@ -717,7 +717,7 @@ func TestAddingASongToAPlaylist(t *testing.T) {
 }
 
 func TestSessionRestoreAndSignOut(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	store := &memoryStore{cookie: "SAPISID=fresh"}
 	a.account.creds.store = store
 	a.account.newClient = func(auth *youtube.CookieAuth) *youtube.Client {
@@ -738,7 +738,7 @@ func TestSessionRestoreAndSignOut(t *testing.T) {
 }
 
 func TestRefusedSessionStaysSignedOut(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.account.creds.store = &memoryStore{cookie: "SAPISID=stale"}
 	a.settings.SignInSource = "Browser"
 	a.account.sources = func() []cookies.Source {
@@ -765,7 +765,7 @@ func TestRefusedSessionStaysSignedOut(t *testing.T) {
 // Plays recorded while the history is still being read are kept, in front of
 // nothing lost and behind what the file held.
 func TestHistoryLoadMergesPendingPlays(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.historyPath = filepath.Join(t.TempDir(), "history.json")
 	t.Cleanup(a.historyWriter.Wait) // the merged history is written in the background
 	var finish func()
@@ -785,7 +785,7 @@ func TestHistoryLoadMergesPendingPlays(t *testing.T) {
 // Clear history asks again, then empties the history in memory and on disk,
 // and the stats page shows nothing played.
 func TestClearHistoryFromSettings(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.historyPath = filepath.Join(t.TempDir(), "history.json")
 	a.loadHistory()
 	a.recordHistory(youtube.MusicItem{VideoID: "a", Title: "A", Subtitle: "X"})
@@ -833,7 +833,7 @@ func TestClearHistoryFromSettings(t *testing.T) {
 // Clearing while the history is still being read must not let the read bring
 // the old plays back.
 func TestClearHistoryWhileItLoads(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.historyPath = filepath.Join(t.TempDir(), "history.json")
 	if err := os.WriteFile(a.historyPath, []byte(`[{"videoId":"old","playedAt":"2026-01-01T00:00:00Z"}]`), 0o600); err != nil {
 		t.Fatal(err)
@@ -851,7 +851,7 @@ func TestClearHistoryWhileItLoads(t *testing.T) {
 }
 
 func TestOpeningTheLogsFolderFromSettings(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.logsDir = "/logs"
 	var opened []string
 	a.openPath = func(path string) error {
@@ -921,7 +921,7 @@ func (rejectingMusic) RoundTrip(request *http.Request) (*http.Response, error) {
 }
 
 func TestRejectedSessionAsksToSignInAgain(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.account.newClient = func(auth *youtube.CookieAuth) *youtube.Client {
 		return youtube.NewClient(youtube.Options{
 			APIKey:     "test",
@@ -956,7 +956,7 @@ func TestRejectedSessionAsksToSignInAgain(t *testing.T) {
 // A browser that cannot be read leaves the sign-in dialog pointing at the
 // Cookie header, with where to copy it from, and a pasted one signs in.
 func TestFailedBrowserImportOffersPastingTheCookieHeader(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.account.sources = func() []cookies.Source {
 		return []cookies.Source{{Label: "Fakefox", Read: func(context.Context) (string, error) {
 			return "", errors.New("no profile found")
@@ -1007,7 +1007,7 @@ func TestFailedBrowserImportOffersPastingTheCookieHeader(t *testing.T) {
 // The browser window signs in without naming a browser, so nothing re-reads
 // the user's own browser for it later, and a window that fails says why.
 func TestSignInWithABrowserWindow(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.account.newClient = func(auth *youtube.CookieAuth) *youtube.Client {
 		return youtube.NewClient(youtube.Options{
 			APIKey:     "test",
@@ -1046,7 +1046,7 @@ func TestSignInWithABrowserWindow(t *testing.T) {
 }
 
 func TestSettingsShowPlaybackToolVersions(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 5000)
 	tt.Frame()
@@ -1064,7 +1064,7 @@ func TestSettingsShowPlaybackToolVersions(t *testing.T) {
 }
 
 func TestGoingBackRestoresWhereAPageWasScrolled(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 500)
 	tt.Frame()

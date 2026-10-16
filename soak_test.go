@@ -85,7 +85,7 @@ func (s *soakArtwork) RoundTrip(request *http.Request) (*http.Response, error) {
 // soakApp is benchApp with fresh pictures, the history and the playback
 // state going to files, and the ticking work the app starts at launch.
 func soakApp(t testing.TB, dir string) (*app, *ui.Tester) {
-	a := newTestApp()
+	a := newTestApp(t)
 	music := &soakMusic{}
 	client := func(auth *youtube.CookieAuth) *youtube.Client {
 		return youtube.NewClient(youtube.Options{APIKey: "test", HTTPClient: &http.Client{Transport: music}, CookieAuth: auth})
@@ -96,7 +96,9 @@ func soakApp(t testing.TB, dir string) (*app, *ui.Tester) {
 		t.Fatal(err)
 	}
 	a.account.session = &session{client: client(auth), cookie: "SAPISID=soak"}
+	a.thumbs.Close()
 	a.thumbs = artwork.New(&http.Client{Transport: newSoakArtwork()}, a.refresh)
+	t.Cleanup(a.thumbs.Close)
 	a.settings.AutoPlay = false
 	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
 		return "", 0, errors.New("soak")

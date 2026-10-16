@@ -8,7 +8,6 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
-	"github.com/elianiva/meiro/internal/report"
 	"github.com/elianiva/meiro/m3"
 )
 
@@ -42,7 +41,7 @@ func (a *app) reportProblem() {
 	a.reportError = ""
 	version := mygo.App.Version()
 	startTask(a, &a.report, reportTimeout, func(ctx context.Context) (string, error) {
-		return report.Collect(ctx, version).URL(), nil
+		return a.collectInfo(ctx, version).URL(), nil
 	}, func(link string, err error) {
 		if err == nil {
 			err = a.openURL(link)

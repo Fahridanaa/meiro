@@ -40,7 +40,7 @@ func (s *switchable) RoundTrip(request *http.Request) (*http.Response, error) {
 // stateApp is a test app, signed in or not, whose YouTube answers through s.
 func stateApp(t *testing.T, s *switchable, signedIn bool) *app {
 	t.Helper()
-	a := newTestApp()
+	a := newTestApp(t)
 	make := func(auth *youtube.CookieAuth) *youtube.Client {
 		return youtube.NewClient(youtube.Options{APIKey: "test", HTTPClient: &http.Client{Transport: s}, CookieAuth: auth})
 	}
@@ -191,7 +191,7 @@ func TestEmptyPagesSayWhatIsMissingAndOfferRetry(t *testing.T) {
 		shot(t, tt, "empty-search")
 	})
 	t.Run("stats", func(t *testing.T) {
-		a := newTestApp()
+		a := newTestApp(t)
 		a.historyLoaded = true
 		tt := open(a, "/stats")
 		mustShow(t, tt, "No plays yet", "14 days")
@@ -219,7 +219,7 @@ func TestHealthyPagesShowNoStateMessage(t *testing.T) {
 		mustNotShow(t, tt, "Retry", "No results for “yorushika”")
 	})
 	t.Run("stats", func(t *testing.T) {
-		a := newTestApp()
+		a := newTestApp(t)
 		a.historyLoaded = true
 		a.history = []history.Entry{{VideoID: "v", Title: "Song", Artist: "Someone", PlayedAt: time.Now()}}
 		tt := open(a, "/stats")

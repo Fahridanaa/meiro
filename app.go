@@ -153,6 +153,9 @@ type app struct {
 
 	// lyricsSource finds a track's lyrics on LRCLIB; tests replace it.
 	lyricsSource lyricsSource
+	// collectInfo reads the versions of the helper programs, which runs
+	// them; tests replace it.
+	collectInfo func(ctx context.Context, app string) report.Info
 
 	// stop ends the periodic work; stopOnce closes it once.
 	stop     chan struct{}
@@ -191,6 +194,7 @@ func newApp() *app {
 	}, cookies.Sources)
 	a.thumbs = artwork.New(&http.Client{Timeout: 30 * time.Second}, a.refresh)
 	a.lyricsSource = new(lrclib.Client).Get
+	a.collectInfo = report.Collect
 	return a
 }
 

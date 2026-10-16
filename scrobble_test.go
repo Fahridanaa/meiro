@@ -641,7 +641,7 @@ func TestConnectingCanBeCancelled(t *testing.T) {
 }
 
 func TestWithoutAnApplicationKeyLastFmCannotBeConnected(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 4000)
 	tt.Frame()

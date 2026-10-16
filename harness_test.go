@@ -3,18 +3,23 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	"github.com/elianiva/meiro/internal/artwork"
+	"github.com/elianiva/meiro/internal/audio"
 	"github.com/elianiva/meiro/internal/cookies"
 	"github.com/elianiva/meiro/internal/lrclib"
 	"github.com/elianiva/meiro/internal/proc"
+	"github.com/elianiva/meiro/internal/report"
 	"github.com/elianiva/meiro/player"
 	"github.com/elianiva/meiro/youtube"
 )
@@ -167,7 +172,7 @@ func nextResponse(like string) string {
 
 // newTestApp builds an app whose work runs inline, and whose YouTube and
 // artwork requests are answered without the network.
-func newTestApp() *app {
+func newTestApp(t testing.TB) *app {
 	a := newApp()
 	// No sound card: the player decodes with the real ffmpeg and listens
 	// to the result on the null device.
@@ -181,7 +186,17 @@ func newTestApp() *app {
 	// Delayed work runs at once, so a frame sees the suggestion request's
 	// answer without waiting.
 	a.sleep = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
+	a.thumbs.Close() // newApp made one that downloads from the network
 	a.thumbs = artwork.New(&http.Client{Transport: noArtwork{}}, func() {})
+	t.Cleanup(a.thumbs.Close)
+	// Playing a track must not run the real yt-dlp: it takes seconds, and
+	// needs the network.
+	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
+		return "", 0, errors.New("no network in tests")
+	})
+	a.collectInfo = func(_ context.Context, version string) report.Info {
+		return report.Info{App: version, OS: runtime.GOOS, Arch: runtime.GOARCH, YtDlp: "2026.01.01", FFmpeg: "7.1"}
+	}
 	a.lyricsSource = func(context.Context, lrclib.Query) (*lrclib.Lyrics, error) { return nil, nil }
 	a.account.newClient = newFakeClient
 	a.account.public = newFakeClient(nil)

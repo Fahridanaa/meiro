@@ -19,7 +19,7 @@ func (a *app) loadToolVersions() {
 	}
 	version := mygo.App.Version()
 	startTask(a, &a.toolsLookup, reportTimeout, func(ctx context.Context) (report.Info, error) {
-		return report.Collect(ctx, version), nil
+		return a.collectInfo(ctx, version), nil
 	}, func(info report.Info, _ error) {
 		a.tools, a.toolsLoaded = info, true
 	})

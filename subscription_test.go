@@ -109,7 +109,7 @@ func TestARejectedSubscriptionIsTakenBack(t *testing.T) {
 
 func TestSignedOutHasNoSubscribeButton(t *testing.T) {
 	resetFakes()
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/artist/UCartist")
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()

@@ -8,7 +8,7 @@ import (
 )
 
 func TestAPanicWhileDrawingShowsTheCrashDialog(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.logsDir = "/logs"
 	var opened []string
 	a.openPath = func(path string) error {
@@ -71,7 +71,7 @@ func TestAPanicWhileDrawingShowsTheCrashDialog(t *testing.T) {
 }
 
 func TestAPanicInBackgroundWorkShowsTheCrashDialog(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	tt := ui.NewTester(a.view, 1000, 900)
 	func() {
 		defer a.recoverBackground("loading a thing")
@@ -93,7 +93,7 @@ func TestAPanicInBackgroundWorkShowsTheCrashDialog(t *testing.T) {
 }
 
 func TestTestsDoNotHidePanicsInWork(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	defer func() {
 		if recover() == nil {
 			t.Error("a panic in work run by a test was swallowed")

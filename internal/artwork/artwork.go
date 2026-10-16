@@ -79,6 +79,7 @@ type Cache struct {
 	// cond wakes the workers that download and decode at most thumbFetches
 	// pictures at a time.
 	cond    *sync.Cond
+	closed  bool
 	queue   map[string]thumbJob
 	bitmaps map[string]*thumb
 	// recent orders bitmaps from most to least recently drawn, so eviction
@@ -254,6 +255,14 @@ func New(client *http.Client, notify func()) *Cache {
 	return t
 }
 
+// Close stops the workers. Pictures already queued are not fetched.
+func (t *Cache) Close() {
+	t.mu.Lock()
+	t.closed = true
+	t.mu.Unlock()
+	t.cond.Broadcast()
+}
+
 // Corner is the corner rounding to ask Bitmap for when the picture is drawn
 // side points across with a corner of radius points.
 func Corner(radius, side float32) float32 {
@@ -369,8 +378,12 @@ const thumbLimit = 8 << 20
 func (t *Cache) worker() {
 	for {
 		t.mu.Lock()
-		for len(t.queue) == 0 {
+		for len(t.queue) == 0 && !t.closed {
 			t.cond.Wait()
+		}
+		if t.closed {
+			t.mu.Unlock()
+			return
 		}
 		job := t.popLocked()
 		store := t.disk

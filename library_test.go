@@ -128,7 +128,7 @@ func TestARejectedSaveIsTakenBack(t *testing.T) {
 
 func TestSignedOutHasNoLibraryButtons(t *testing.T) {
 	resetFakes()
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/album/MPREb_test")
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
@@ -189,7 +189,7 @@ func TestTakingAPlaylistOutOfTheLibraryFromItsCard(t *testing.T) {
 
 // A control that looks small still takes a press 48 DIPs wide and high.
 func TestSmallControlsHaveAFullSizeTarget(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/home")
 	a.router.Push("/album/MPREb_test")
 	tt := ui.NewTester(a.view, 1000, 700)

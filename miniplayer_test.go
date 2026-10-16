@@ -13,7 +13,7 @@ import (
 )
 
 func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
 	tt.Frame()
 	if !tt.HasText("Nothing playing") {
@@ -36,7 +36,7 @@ func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 }
 
 func TestMiniPlayerExpandsToTabs(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.queue.restore(playstate.State{Items: tracks("a", "b"), Index: 0, RecStart: -1})
 	a.current = a.queue.current()
 	tt := ui.NewTester(a.miniPlayer, miniWidth, miniTallHeight)
@@ -61,7 +61,7 @@ func TestMiniPlayerExpandsToTabs(t *testing.T) {
 }
 
 func TestLyricsSwitchBetweenSyncedAndStatic(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.lyricsSource = func(context.Context, lrclib.Query) (*lrclib.Lyrics, error) {
 		return &lrclib.Lyrics{
 			Plain:  "first words\nsecond words",
@@ -98,7 +98,7 @@ func TestLyricsSwitchBetweenSyncedAndStatic(t *testing.T) {
 }
 
 func TestFailedLyricsLookupIsTriedAgain(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	calls := 0
 	a.lyricsSource = func(context.Context, lrclib.Query) (*lrclib.Lyrics, error) {
 		calls++

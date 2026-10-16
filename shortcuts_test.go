@@ -10,7 +10,7 @@ import (
 )
 
 func TestDefaultShortcutsNavigate(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
 	for _, k := range []struct {
@@ -33,7 +33,7 @@ func TestDefaultShortcutsNavigate(t *testing.T) {
 }
 
 func TestVolumeShortcuts(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	tt := ui.NewTester(a.view, 1000, 700)
 	a.setVolume(50)
 	tt.Frame()
@@ -50,7 +50,7 @@ func TestVolumeShortcuts(t *testing.T) {
 
 // A shortcut the user moved answers to its new key only.
 func TestChangedShortcutReplacesTheDefault(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.settings.Shortcuts = map[string]string{"settings": "Cmd+Shift+P"}
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
@@ -67,7 +67,7 @@ func TestChangedShortcutReplacesTheDefault(t *testing.T) {
 }
 
 func TestRecordingANewShortcut(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 5000)
 	tt.Frame()
@@ -118,7 +118,7 @@ func TestRecordingANewShortcut(t *testing.T) {
 }
 
 func TestEscapeCancelsRecording(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	a.router.Push("/settings")
 	tt := ui.NewTester(a.view, 1000, 5000)
 	tt.Frame()
@@ -133,7 +133,7 @@ func TestEscapeCancelsRecording(t *testing.T) {
 
 func TestHoldingTheModifierShowsTheKeysOverTheControls(t *testing.T) {
 	for _, mods := range []ui.Modifiers{ui.Ctrl, ui.Super} {
-		a := newTestApp()
+		a := newTestApp(t)
 		a.settings.Shortcuts = map[string]string{"settings": "Cmd+Shift+P", "next": "Cmd+J"}
 		a.keyboard.hintDelay = 0
 		a.current = tracks("a")[0]
@@ -170,7 +170,7 @@ func hasTextExactly(tt *ui.Tester, want string) bool {
 
 // A short press of Ctrl, as in Ctrl+C, does not flash the overlay.
 func TestBriefModifierShowsNothing(t *testing.T) {
-	a := newTestApp()
+	a := newTestApp(t)
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.HoldModifiers(ui.Ctrl)
 	tt.Frame()
