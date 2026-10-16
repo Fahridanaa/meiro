@@ -283,7 +283,7 @@ func zenProfileRoots(home, config, goos string) []string {
 	case "linux":
 		roots = append(roots,
 			filepath.Join(home, ".zen"),
-			filepath.Join(home, ".var", "app", "app.zen_browser.zen", "zen"),
+			filepath.Join(home, ".var", "app", zenFlatpak, ".zen"),
 		)
 	case "darwin":
 		roots = append(roots, filepath.Join(home, "Library", "Application Support", "zen"))

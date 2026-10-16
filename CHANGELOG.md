@@ -27,6 +27,10 @@ and this project adheres to
 
 ### Fixed
 
+- **A Zen Flatpak install shows its session in the import menu.** The menu
+  searched a directory Zen never writes, so a session in a Flatpak Zen was
+  missing from the list. It now finds the profiles in the directory Flatpak
+  persists, `~/.var/app/app.zen_browser.zen/.zen`.
 - **The menu button no longer slides.** When the side menu opens or closes,
   the button stays above the icons instead of drifting while the menu grows.
 - **Small buttons are easier to hit.** Icon buttons, chips, switches and

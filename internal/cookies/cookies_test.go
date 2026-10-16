@@ -3,7 +3,9 @@ package cookies
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -30,6 +32,29 @@ func TestFromNetscapeKeepsLiveYouTubeCookies(t *testing.T) {
 	got, err := fromNetscape(file, now)
 	if err != nil || got != "SAPISID=live; SID=session" {
 		t.Errorf("fromNetscape = %q, %v", got, err)
+	}
+}
+
+func TestZenProfileRootsPointAtTheFlatpakDataDirectory(t *testing.T) {
+	home := t.TempDir()
+	roots := zenProfileRoots(home, "", "linux")
+	want := filepath.Join(home, ".var", "app", zenFlatpak, ".zen")
+	if !slices.Contains(roots, want) {
+		t.Fatalf("zenProfileRoots = %v, want %s", roots, want)
+	}
+	wrong := filepath.Join(home, ".var", "app", zenFlatpak, "zen")
+	if slices.Contains(roots, wrong) {
+		t.Errorf("zenProfileRoots still holds %s", wrong)
+	}
+	profile := filepath.Join(want, "abc123.default-release")
+	if err := os.MkdirAll(profile, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profile, "cookies.sqlite"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if profiles := firefoxProfiles(roots); !slices.Contains(profiles, profile) {
+		t.Errorf("firefoxProfiles = %v, want %s", profiles, profile)
 	}
 }
 
