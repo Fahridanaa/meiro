@@ -921,6 +921,44 @@ func TestLinuxCandidatesNeedTheFlatpakAndSnapTools(t *testing.T) {
 	}
 }
 
+// TestFindBrowserKeepsChromiumFirstWhenNothingIsDefaulted checks the Linux
+// fallback order: with no default browser to prefer, a Flatpak Chromium wins
+// over a native Zen.
+func TestFindBrowserKeepsChromiumFirstWhenNothingIsDefaulted(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the Flatpak and native candidates are Linux installs")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", "")
+	bin := t.TempDir()
+	t.Setenv("PATH", bin)
+	for name, body := range map[string]string{
+		"zen":     "#!/bin/sh\n",
+		"flatpak": "#!/bin/sh\n[ \"$1 $2\" = \"info org.chromium.Chromium\" ]\n",
+	} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	export := filepath.Join(home, ".local", "share", "flatpak", "exports", "bin", "org.chromium.Chromium")
+	if err := os.MkdirAll(filepath.Dir(export), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(export, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	// No xdg-settings on PATH, so there is no default to prefer.
+	b, ok := findBrowser(context.Background(), true)
+	if !ok {
+		t.Fatal("findBrowser found no browser")
+	}
+	if b.path != export {
+		t.Errorf("findBrowser picked %s, want the Flatpak Chromium %s", b.path, export)
+	}
+}
+
 // TestLinuxCandidatesUseXDGDataHome checks a user Flatpak install under a
 // custom XDG_DATA_HOME is found at the path Flatpak actually uses.
 func TestLinuxCandidatesUseXDGDataHome(t *testing.T) {

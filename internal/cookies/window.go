@@ -344,8 +344,8 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 		}, nil
 	case firefoxFamily:
 		// The reader runs yt-dlp, which makes a request of its own, so it
-		// runs only when the profile's cookie store changes and, while no
-		// session is cached, after the recheck time.
+		// runs when the profile's cookie store changes, or when no session
+		// is cached and the recheck time has passed.
 		var readAt time.Time
 		var readTime time.Time
 		var failedAt time.Time

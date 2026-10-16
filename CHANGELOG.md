@@ -39,7 +39,7 @@ and this project adheres to
   export or snap link can outlive an uninstall and win over the browser
   actually installed. The sign-in now asks the package manager whether the
   install is still there.
-- **The sign-in picks the same browser on every platform.** When the default
+- **The fallback order is the same on every platform.** When the default
   browser is not one Meiro drives, the window opens in the first
   Chromium-based browser Meiro knows, on Windows and macOS too. A user
   Flatpak install under a custom `XDG_DATA_HOME` is found as well.
