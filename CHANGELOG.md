@@ -28,6 +28,17 @@ and this project adheres to
 
 ### Fixed
 
+- **A Firefox or Zen sign-in finds the session it just made.** Firefox keeps
+  a fresh cookie in a write-ahead log, and the sign-in read only the main
+  database, so a finished sign-in could look signed out. The window now makes
+  Firefox checkpoint the cookie at once.
+- **A Firefox or Zen sign-in falls back to a Chromium browser without
+  yt-dlp.** Reading a Firefox profile needs yt-dlp. Without it, the window
+  opens in a Chromium-based browser instead of failing.
+- **A removed Flatpak or Snap install no longer hides a native browser.** An
+  export or snap link can outlive an uninstall and win over the browser
+  actually installed. The sign-in now asks the package manager whether the
+  install is still there.
 - **A Zen Flatpak install shows its session in the import menu.** The menu
   searched a directory Zen never writes, so a session in a Flatpak Zen was
   missing from the list. It now finds the profiles in the directory Flatpak
