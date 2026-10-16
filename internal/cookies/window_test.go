@@ -32,7 +32,7 @@ func TestMain(m *testing.M) {
 // shows a signed-out page for two reads and then a signed-in one; "quit"
 // goes away on the first read, as a window the user closed does. "firefox"
 // writes the cookie database of a profile and waits to be killed;
-// "firefox-quit" exits at once.
+// "firefox-quit" exits at once, or after MEIRO_FAKE_BROWSER_WAIT exists.
 func fakeBrowser(mode string, args []string) {
 	if mode == "firefox" || mode == "firefox-quit" {
 		profile := valueAfter(args, "-profile")
@@ -47,6 +47,14 @@ func fakeBrowser(mode string, args []string) {
 			os.Exit(2)
 		}
 		if mode == "firefox-quit" {
+			if wait := os.Getenv("MEIRO_FAKE_BROWSER_WAIT"); wait != "" {
+				for {
+					if _, err := os.Stat(wait); err == nil {
+						break
+					}
+					time.Sleep(5 * time.Millisecond)
+				}
+			}
 			os.Exit(0)
 		}
 		for {
@@ -280,36 +288,34 @@ func TestSignInWindowFirefoxReportsAClosedWindow(t *testing.T) {
 
 func TestSignInWindowReportsAClosedWindowDuringARead(t *testing.T) {
 	started := make(chan struct{}, 1)
+	hold := filepath.Join(t.TempDir(), "hold")
+	t.Setenv("MEIRO_FAKE_BROWSER_WAIT", hold)
 	options := fakeFirefoxWindow(t, "firefox-quit", func(ctx context.Context, _ string) (string, error) {
-		select {
-		case started <- struct{}{}:
-		default:
-		}
+		started <- struct{}{}
 		<-ctx.Done()
 		return "", ctx.Err()
 	})
 	done := make(chan error, 1)
-	start := time.Now()
 	go func() {
 		_, err := SignInWindow(context.Background(), options)
 		done <- err
 	}()
-	var err error
-	select {
-	case err = <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the sign-in waited for a reader that was blocked")
-	}
-	if !errors.Is(err, ErrWindowClosed) {
-		t.Errorf("err = %v, want ErrWindowClosed", err)
-	}
-	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Errorf("the sign-in took %v to report the closed window", elapsed)
-	}
 	select {
 	case <-started:
 	case <-time.After(5 * time.Second):
-		t.Error("the reader never ran")
+		t.Fatal("the reader never ran")
+	}
+	// Only now does the window end, with the reader still blocked.
+	if err := os.WriteFile(hold, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrWindowClosed) {
+			t.Errorf("err = %v, want ErrWindowClosed", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the sign-in waited for a reader that was blocked")
 	}
 }
 
