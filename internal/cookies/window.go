@@ -46,6 +46,11 @@ type WindowOptions struct {
 	// chromiumFamily, the zero value, for the Chromium browser a test
 	// stands in with.
 	family browserFamily
+	// profileRoot is where the throwaway profile is made when Executable
+	// names the browser, "" for this app's private temporary directory. A
+	// test sets it to a directory it can check; a found candidate carries
+	// its own.
+	profileRoot string
 	// read reads the Cookie header of a Firefox-family profile. It is nil
 	// for the real sign-in, which reads the profile the way an import
 	// does, through yt-dlp; tests replace it so they need no yt-dlp.
@@ -85,21 +90,21 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 		}
 		read = firefoxProfileCookie
 	}
-	host, arg, err := b.privateProfile()
+	profile, err := b.privateProfile()
 	if err != nil {
 		return "", err
 	}
-	defer removeAll(host)
+	defer removeAll(profile)
 
 	if b.family == firefoxFamily {
-		if err := writeFirefoxPreferences(host, b.kind); err != nil {
+		if err := writeFirefoxPreferences(profile, b.kind); err != nil {
 			return "", err
 		}
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, SignInTimeout)
 	defer cancel()
-	cmd := proc.Command(ctx, b.path, b.windowArgs(arg, options.URL)...)
+	cmd := proc.Command(ctx, b.path, b.windowArgs(profile, options.URL)...)
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start the browser: %w", err)
 	}
@@ -108,13 +113,15 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 		_ = cmd.Wait()
 		close(exited)
 	}()
-	// Whatever happens, the window does not outlive the sign-in.
+	// Whatever happens, the window does not outlive the sign-in. A Flatpak
+	// wrapper execs the browser, so its sandbox stays in the process group
+	// the deferred cancel kills.
 	defer func() {
 		cancel()
 		<-exited
 	}()
 
-	w, err := b.open(ctx, host, exited, read)
+	w, err := b.open(ctx, profile, exited, read)
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +138,7 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 // machine.
 func (o WindowOptions) browser(ctx context.Context) (candidate, bool) {
 	if o.Executable != "" {
-		return candidate{family: o.family, path: o.Executable}, true
+		return candidate{family: o.family, path: o.Executable, profileRoot: o.profileRoot}, true
 	}
 	return findBrowser(ctx)
 }
@@ -169,8 +176,7 @@ func cookieDatabaseModTime(profile string) time.Time {
 	return latest
 }
 
-// windowArgs are the flags that open url on a private profile. profile is
-// the path the browser sees, not the host path.
+// windowArgs are the flags that open url on a private profile.
 func (b candidate) windowArgs(profile, url string) []string {
 	switch b.family {
 	case chromiumFamily:
@@ -219,26 +225,18 @@ func firefoxWindowArgs(profile, url string) []string {
 }
 
 // privateProfile creates the throwaway profile the sign-in window opens in.
-// It returns the host path, which this app reads and deletes, and the path to
-// give the browser, which differs only for a Flatpak browser: its sandbox
-// cannot see this app's temporary directory.
-func (b candidate) privateProfile() (host, arg string, err error) {
-	if b.flatpak == nil {
-		dir, err := proc.MkdirTemp(signinProfilePrefix)
-		if err != nil {
-			return "", "", err
-		}
-		return dir, dir, nil
+// A native browser shares this app's private temporary directory. A Flatpak
+// or Snap browser needs a profile under a directory its sandbox can see and
+// reaches at the same path as the host.
+func (b candidate) privateProfile() (string, error) {
+	if b.profileRoot == "" {
+		return proc.MkdirTemp(signinProfilePrefix)
 	}
-	if err := os.MkdirAll(b.flatpak.host, 0o700); err != nil {
-		return "", "", err
+	if err := os.MkdirAll(b.profileRoot, 0o700); err != nil {
+		return "", err
 	}
-	proc.SweepStale(b.flatpak.host, signinProfilePrefix)
-	dir, err := os.MkdirTemp(b.flatpak.host, signinProfilePrefix)
-	if err != nil {
-		return "", "", err
-	}
-	return dir, filepath.Join(b.flatpak.sandbox, filepath.Base(dir)), nil
+	proc.SweepStale(b.profileRoot, signinProfilePrefix)
+	return os.MkdirTemp(b.profileRoot, signinProfilePrefix)
 }
 
 // open returns the way to read the session of a browser started on profile,
@@ -407,17 +405,6 @@ const (
 // profileReader reads the Cookie header of a Firefox-family profile.
 type profileReader func(ctx context.Context, profile string) (string, error)
 
-// flatpakProfile is how a Flatpak browser's sandbox sees the data directory
-// its private profiles are made in. Flatpak does not share this app's
-// temporary directory, and it renames the persisted directory; both facts
-// live here, where discovery sets them.
-type flatpakProfile struct {
-	// host is the host directory the private profile is created under.
-	host string
-	// sandbox is the directory the sandbox shows host at.
-	sandbox string
-}
-
 // browserWindow is a started sign-in window whose session can be read.
 type browserWindow struct {
 	// read returns the Cookie header of the session the window holds, ""
@@ -437,16 +424,23 @@ type candidate struct {
 	family browserFamily
 	// path is an absolute path, or a command to find on PATH.
 	path string
-	// flatpak is set when the browser runs in a Flatpak sandbox. nil means
-	// the browser sees the app's temporary directory, which is what a
-	// normal install gets.
-	flatpak *flatpakProfile
+	// profileRoot is the directory the throwaway profile is made under. ""
+	// means this app's private temporary directory, which a native install
+	// shares. A Flatpak or Snap browser needs a directory its sandbox sees:
+	// Flatpak mounts ~/.var/app/<id> and Snap ~/snap/<name> at the same path
+	// on both sides.
+	profileRoot string
+	// desktopID is the .desktop file of this install on Linux, "" for a
+	// native one. Flatpak exports <flatpakID>.desktop, Snap
+	// <snapName>_<snapName>.desktop.
+	desktopID string
 }
 
 // findBrowser is the browser to open the sign-in window in: the user's
 // default browser when it is one of these, and otherwise the first installed.
 func findBrowser(ctx context.Context) (candidate, bool) {
-	for _, c := range preferring(browserCandidates(), defaultBrowserKind(ctx)) {
+	id := defaultBrowserID(ctx)
+	for _, c := range preferring(browserCandidates(), id, browserKind(id)) {
 		if c.installed() {
 			return c, true
 		}
@@ -458,7 +452,15 @@ func findBrowser(ctx context.Context) (candidate, bool) {
 // first so a machine with no readable default keeps the browser it used
 // before.
 func browserCandidates() []candidate {
-	return append(chromiumCandidates(), firefoxCandidates()...)
+	table := browserTable()
+	switch runtime.GOOS {
+	case "darwin":
+		return darwinCandidates(table)
+	case "windows":
+		return windowsCandidates(table)
+	default:
+		return linuxCandidates(table)
+	}
 }
 
 // installed reports whether the browser is on this machine. An absolute path
@@ -472,71 +474,25 @@ func (b candidate) installed() bool {
 	return err == nil
 }
 
-// firefoxCandidates lists the Firefox-family browsers of this system. A
-// Flatpak browser needs more than its path: its exported command is what this
-// app runs, but its private profile goes under the data directory the sandbox
-// exposes, and the browser is told the sandbox path.
-func firefoxCandidates() []candidate {
-	home, homeErr := os.UserHomeDir()
-	if homeErr != nil {
-		home = ""
-	}
-	var out []candidate
-	switch runtime.GOOS {
-	case "darwin":
-		apps := []string{"/Applications"}
-		if home != "" {
-			apps = append(apps, filepath.Join(home, "Applications"))
-		}
-		for _, dir := range apps {
-			out = append(out,
-				candidate{kind: "firefox", family: firefoxFamily, path: filepath.Join(dir, "Firefox.app", "Contents", "MacOS", "firefox")},
-				candidate{kind: "zen", family: firefoxFamily, path: filepath.Join(dir, "Zen.app", "Contents", "MacOS", "zen")},
-			)
-		}
-	case "windows":
-		for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
-			root := os.Getenv(env)
-			if root == "" {
-				continue
+// preferring puts the browser the default names first. An exact .desktop
+// match wins, so the Flatpak or Snap install the system named is preferred
+// over another install of the same browser. With no exact match, every
+// candidate of the named kind moves up, which is how a native install, a
+// macOS bundle ID and a Windows ProgID resolve.
+func preferring(all []candidate, desktopID, kind string) []candidate {
+	if desktopID != "" {
+		var named, rest []candidate
+		for _, c := range all {
+			if c.desktopID == desktopID {
+				named = append(named, c)
+			} else {
+				rest = append(rest, c)
 			}
-			out = append(out, candidate{kind: "firefox", family: firefoxFamily, path: filepath.Join(root, "Mozilla Firefox", "firefox.exe")})
 		}
-	default:
-		out = append(out,
-			candidate{kind: "firefox", family: firefoxFamily, path: "firefox"},
-			candidate{kind: "zen", family: firefoxFamily, path: "zen"},
-			candidate{kind: "zen", family: firefoxFamily, path: "zen-browser"},
-		)
-		if home == "" {
-			break
-		}
-		// The exported wrapper runs flatpak, so it is only usable while the
-		// CLI is installed.
-		if _, err := exec.LookPath("flatpak"); err != nil {
-			break
-		}
-		for _, exports := range []string{
-			filepath.Join(home, ".local", "share", "flatpak", "exports", "bin"),
-			"/var/lib/flatpak/exports/bin",
-		} {
-			out = append(out, candidate{
-				kind: "zen", family: firefoxFamily,
-				path: filepath.Join(exports, zenFlatpak),
-				flatpak: &flatpakProfile{
-					host:    filepath.Join(home, ".var", "app", zenFlatpak, ".zen"),
-					sandbox: filepath.Join(home, ".zen"),
-				},
-			})
+		if len(named) > 0 {
+			return append(named, rest...)
 		}
 	}
-	return out
-}
-
-// preferring moves the candidates of one kind of browser to the front. The
-// others keep their order, so a default browser that is not installed in a
-// form this finds, or is not one of these, still leaves a browser to use.
-func preferring(all []candidate, kind string) []candidate {
 	if kind == "" {
 		return all
 	}
@@ -579,10 +535,11 @@ func browserKind(id string) string {
 	return ""
 }
 
-// defaultBrowserKind asks the system which browser the user chose to open
-// links, and names its kind when the sign-in window can use it. It gives ""
-// when the default is another browser or cannot be read.
-func defaultBrowserKind(ctx context.Context) string {
+// defaultBrowserID asks the system which browser the user chose to open
+// links. It returns the lowercased identifier the system uses: the .desktop
+// file on Linux, the bundle ID on macOS, the ProgID on Windows, or "" when
+// it cannot be read.
+func defaultBrowserID(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	switch runtime.GOOS {
@@ -591,7 +548,7 @@ func defaultBrowserKind(ctx context.Context) string {
 		if err != nil {
 			return ""
 		}
-		return browserKind(string(out))
+		return strings.ToLower(strings.TrimSpace(string(out)))
 	case "darwin":
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -602,7 +559,7 @@ func defaultBrowserKind(ctx context.Context) string {
 		if err != nil {
 			return ""
 		}
-		return browserKind(macHTTPSHandler(out))
+		return strings.ToLower(macHTTPSHandler(out))
 	case "windows":
 		out, err := proc.Command(ctx, "reg", "query", `HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice`, "/v", "ProgId").Output()
 		if err != nil {
@@ -614,7 +571,7 @@ func defaultBrowserKind(ctx context.Context) string {
 		if len(fields) == 0 {
 			return ""
 		}
-		return browserKind(fields[len(fields)-1])
+		return strings.ToLower(fields[len(fields)-1])
 	}
 	return ""
 }
@@ -640,59 +597,184 @@ func macHTTPSHandler(prefs []byte) string {
 	return ""
 }
 
-func chromiumCandidates() []candidate {
-	switch runtime.GOOS {
-	case "darwin":
-		home, _ := os.UserHomeDir()
-		var out []candidate
-		for _, apps := range []string{"/Applications", filepath.Join(home, "Applications")} {
-			for _, b := range []struct{ kind, name string }{
-				{"chrome", "Google Chrome"},
-				{"edge", "Microsoft Edge"},
-				{"brave", "Brave Browser"},
-				{"chromium", "Chromium"},
-				{"vivaldi", "Vivaldi"},
-				{"helium", "Helium"},
-			} {
-				out = append(out, candidate{kind: b.kind, path: filepath.Join(apps, b.name+".app", "Contents", "MacOS", b.name)})
-			}
-		}
-		return out
-	case "windows":
-		var out []candidate
-		for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
-			root := os.Getenv(env)
-			if root == "" {
-				continue
-			}
-			out = append(out,
-				candidate{kind: "chrome", path: filepath.Join(root, "Google", "Chrome", "Application", "chrome.exe")},
-				candidate{kind: "edge", path: filepath.Join(root, "Microsoft", "Edge", "Application", "msedge.exe")},
-				candidate{kind: "brave", path: filepath.Join(root, "BraveSoftware", "Brave-Browser", "Application", "brave.exe")},
-				candidate{kind: "chromium", path: filepath.Join(root, "Chromium", "Application", "chrome.exe")},
-				candidate{kind: "vivaldi", path: filepath.Join(root, "Vivaldi", "Application", "vivaldi.exe")},
-				// Helium's folder is a best guess; it is not checked on a
-				// Windows machine.
-				candidate{kind: "helium", path: filepath.Join(root, "imput", "Helium", "Application", "chrome.exe")},
-				candidate{kind: "helium", path: filepath.Join(root, "Helium", "Application", "chrome.exe")})
-		}
-		return out
-	default:
-		return []candidate{
-			{kind: "chrome", path: "google-chrome"},
-			{kind: "chrome", path: "google-chrome-stable"},
-			{kind: "chromium", path: "chromium"},
-			{kind: "chromium", path: "chromium-browser"},
-			{kind: "edge", path: "microsoft-edge"},
-			{kind: "edge", path: "microsoft-edge-stable"},
-			{kind: "brave", path: "brave-browser"},
-			{kind: "brave", path: "brave"},
-			{kind: "vivaldi", path: "vivaldi"},
-			{kind: "vivaldi", path: "vivaldi-stable"},
-			// Helium's own packages name the command helium, the AUR one
-			// helium-browser.
-			{kind: "helium", path: "helium"},
-			{kind: "helium", path: "helium-browser"},
+// browserSpec is one browser the sign-in window can start and every
+// install of it this app knows. One row per browser.
+type browserSpec struct {
+	kind      string
+	family    browserFamily // the zero value is chromiumFamily
+	commands  []string      // the PATH names of a native install
+	flatpakID string        // the Flatpak application ID, "" when none
+	snapName  string        // the Snap name, "" when none
+	macApp    string        // the app bundle name on macOS
+	macExec   string        // its executable, when that differs from macApp
+	winPaths  []string      // paths under each Windows install root
+}
+
+// browserTable lists every browser the sign-in window can start, the
+// Chromium-based rows first so the no-default fallback keeps the browser it
+// used before.
+func browserTable() []browserSpec {
+	return []browserSpec{
+		{
+			kind:      "chrome",
+			commands:  []string{"google-chrome", "google-chrome-stable"},
+			flatpakID: "com.google.Chrome",
+			macApp:    "Google Chrome",
+			winPaths:  []string{filepath.Join("Google", "Chrome", "Application", "chrome.exe")},
+		},
+		{
+			kind:      "chromium",
+			commands:  []string{"chromium", "chromium-browser"},
+			flatpakID: "org.chromium.Chromium",
+			snapName:  "chromium",
+			macApp:    "Chromium",
+			winPaths:  []string{filepath.Join("Chromium", "Application", "chrome.exe")},
+		},
+		{
+			kind:      "edge",
+			commands:  []string{"microsoft-edge", "microsoft-edge-stable"},
+			flatpakID: "com.microsoft.Edge",
+			macApp:    "Microsoft Edge",
+			winPaths:  []string{filepath.Join("Microsoft", "Edge", "Application", "msedge.exe")},
+		},
+		{
+			kind:      "brave",
+			commands:  []string{"brave-browser", "brave"},
+			flatpakID: "com.brave.Browser",
+			macApp:    "Brave Browser",
+			winPaths:  []string{filepath.Join("BraveSoftware", "Brave-Browser", "Application", "brave.exe")},
+		},
+		{
+			kind:      "vivaldi",
+			commands:  []string{"vivaldi", "vivaldi-stable"},
+			flatpakID: "com.vivaldi.Vivaldi",
+			macApp:    "Vivaldi",
+			winPaths:  []string{filepath.Join("Vivaldi", "Application", "vivaldi.exe")},
+		},
+		{
+			kind:     "helium",
+			commands: []string{"helium", "helium-browser"},
+			macApp:   "Helium",
+			// Helium's folder is a best guess; it is not checked on a
+			// Windows machine.
+			winPaths: []string{
+				filepath.Join("imput", "Helium", "Application", "chrome.exe"),
+				filepath.Join("Helium", "Application", "chrome.exe"),
+			},
+		},
+		{
+			kind:      "firefox",
+			family:    firefoxFamily,
+			commands:  []string{"firefox"},
+			flatpakID: "org.mozilla.firefox",
+			snapName:  "firefox",
+			macApp:    "Firefox",
+			macExec:   "firefox",
+			winPaths:  []string{filepath.Join("Mozilla Firefox", "firefox.exe")},
+		},
+		{
+			kind:      "zen",
+			family:    firefoxFamily,
+			commands:  []string{"zen", "zen-browser"},
+			flatpakID: zenFlatpak,
+			macApp:    "Zen",
+			macExec:   "zen",
+		},
+	}
+}
+
+// linuxCandidates builds the native, Flatpak and Snap installs of every row.
+// The Flatpak and Snap tools gate their candidates, so a machine without
+// them, and a test with an empty PATH, sees neither install kind.
+func linuxCandidates(table []browserSpec) []candidate {
+	var out []candidate
+	for _, spec := range table {
+		for _, command := range spec.commands {
+			out = append(out, candidate{kind: spec.kind, family: spec.family, path: command})
 		}
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return out
+	}
+	if _, err := exec.LookPath("flatpak"); err == nil {
+		for _, spec := range table {
+			if spec.flatpakID == "" {
+				continue
+			}
+			for _, root := range []string{
+				filepath.Join(home, ".local", "share", "flatpak", "exports", "bin"),
+				"/var/lib/flatpak/exports/bin",
+			} {
+				out = append(out, candidate{
+					kind:        spec.kind,
+					family:      spec.family,
+					path:        filepath.Join(root, spec.flatpakID),
+					profileRoot: filepath.Join(home, ".var", "app", spec.flatpakID, "data"),
+					desktopID:   strings.ToLower(spec.flatpakID) + ".desktop",
+				})
+			}
+		}
+	}
+	if _, err := exec.LookPath("snap"); err == nil {
+		for _, spec := range table {
+			if spec.snapName == "" {
+				continue
+			}
+			out = append(out, candidate{
+				kind:        spec.kind,
+				family:      spec.family,
+				path:        filepath.Join("/snap/bin", spec.snapName),
+				profileRoot: filepath.Join(home, "snap", spec.snapName, "common"),
+				desktopID:   strings.ToLower(spec.snapName+"_"+spec.snapName) + ".desktop",
+			})
+		}
+	}
+	return out
+}
+
+// darwinCandidates builds the app bundle install of every row under each
+// Applications directory.
+func darwinCandidates(table []browserSpec) []candidate {
+	roots := []string{"/Applications"}
+	if home, err := os.UserHomeDir(); err == nil {
+		roots = append(roots, filepath.Join(home, "Applications"))
+	}
+	var out []candidate
+	for _, root := range roots {
+		for _, spec := range table {
+			exec := spec.macExec
+			if exec == "" {
+				exec = spec.macApp
+			}
+			out = append(out, candidate{
+				kind:   spec.kind,
+				family: spec.family,
+				path:   filepath.Join(root, spec.macApp+".app", "Contents", "MacOS", exec),
+			})
+		}
+	}
+	return out
+}
+
+// windowsCandidates builds every install of every row under each Windows
+// install root.
+func windowsCandidates(table []browserSpec) []candidate {
+	var out []candidate
+	for _, env := range []string{"ProgramFiles", "ProgramFiles(x86)", "LocalAppData"} {
+		root := os.Getenv(env)
+		if root == "" {
+			continue
+		}
+		for _, spec := range table {
+			for _, path := range spec.winPaths {
+				out = append(out, candidate{
+					kind:   spec.kind,
+					family: spec.family,
+					path:   filepath.Join(root, path),
+				})
+			}
+		}
+	}
+	return out
 }

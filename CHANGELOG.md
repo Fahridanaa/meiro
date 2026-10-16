@@ -12,9 +12,10 @@ and this project adheres to
 
 - **Firefox and Zen sign in with a browser window.** Account setup now opens
   a separate Firefox or Zen window with a temporary profile when one of those
-  is the default browser, or when it is the one installed. Meiro reads the
-  session from that profile the way an import does, closes the window, and
-  deletes the profile.
+  is the default browser, or when it is the one installed. Native, Flatpak and
+  Snap installs all work, because the profile is created in the data directory
+  the browser's sandbox sees. Meiro reads the session from that profile the
+  way an import does, closes the window, and deletes the profile.
 - **Synced lyrics.** The Lyrics tab now shows timed lyrics, from YouTube Music
   when it has them and from LRCLIB otherwise. The line being sung is lit and
   glides to the middle as the song plays, lines fade the further they are from

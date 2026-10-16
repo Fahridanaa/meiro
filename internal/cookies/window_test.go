@@ -287,26 +287,91 @@ func TestFirefoxPreferencesTurnOffFirstRunPages(t *testing.T) {
 	}
 }
 
-func TestPrivateProfileUsesTheSandboxPathForAFlatpakBrowser(t *testing.T) {
-	hostRoot := filepath.Join(t.TempDir(), "data")
-	sandboxRoot := filepath.Join(t.TempDir(), ".zen")
-	b := candidate{kind: "zen", family: firefoxFamily, flatpak: &flatpakProfile{host: hostRoot, sandbox: sandboxRoot}}
-	host, sandbox, err := b.privateProfile()
+func TestPrivateProfileUsesItsProfileRoot(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "data")
+	b := candidate{kind: "zen", family: firefoxFamily, profileRoot: root}
+	profile, err := b.privateProfile()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Dir(host) != hostRoot {
-		t.Errorf("host profile %s is not under %s", host, hostRoot)
+	if filepath.Dir(profile) != root {
+		t.Errorf("profile %s is not under the profile root %s", profile, root)
 	}
-	if filepath.Dir(sandbox) != sandboxRoot {
-		t.Errorf("sandbox profile %s is not under %s", sandbox, sandboxRoot)
+	if !strings.HasPrefix(filepath.Base(profile), signinProfilePrefix) {
+		t.Errorf("profile %s does not carry the %s prefix", profile, signinProfilePrefix)
 	}
-	if filepath.Base(host) != filepath.Base(sandbox) {
-		t.Errorf("host %s and sandbox %s name different profiles", host, sandbox)
+
+	// A native browser gets a profile in this app's private temporary
+	// directory, under a root of its own.
+	native := candidate{kind: "chrome"}
+	profile, err = native.privateProfile()
+	if err != nil {
+		t.Fatal(err)
 	}
-	// The browser's temporary files never go to this app's temp directory.
-	if strings.HasPrefix(host, filepath.Join(os.TempDir(), "meiro-tmp-")) {
-		t.Errorf("host profile %s is in the app's temporary directory", host)
+	if filepath.Dir(filepath.Dir(profile)) != filepath.Clean(os.TempDir()) {
+		t.Errorf("native profile %s is not in the app's private temporary directory", profile)
+	}
+}
+
+func TestSignInWindowKillsTheBrowserWrapperTree(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the process-group kill is a Unix mechanism")
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "data")
+	marker := filepath.Join(t.TempDir(), "marker")
+	t.Setenv("MEIRO_FAKE_BROWSER", "firefox")
+	t.Setenv("MEIRO_FAKE_BROWSER_PROFILE", filepath.Join(t.TempDir(), "profile-path"))
+	t.Setenv("MEIRO_TEST_BROWSER", exe)
+	t.Setenv("MEIRO_TEST_MARKER", marker)
+
+	script := filepath.Join(t.TempDir(), "browser")
+	body := "#!/bin/sh\n" +
+		"while true; do echo alive >> \"$MEIRO_TEST_MARKER\"; sleep 0.05; done &\n" +
+		"exec \"$MEIRO_TEST_BROWSER\" \"$@\"\n"
+	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	options := WindowOptions{
+		Executable:  script,
+		family:      firefoxFamily,
+		profileRoot: root,
+		read: func(context.Context, string) (string, error) {
+			return "SAPISID=live; SID=session", nil
+		},
+		Poll:   10 * time.Millisecond,
+		Settle: 30 * time.Millisecond,
+	}
+	if _, err := SignInWindow(context.Background(), options); err != nil {
+		t.Fatal(err)
+	}
+	profile, err := os.ReadFile(os.Getenv("MEIRO_FAKE_BROWSER_PROFILE"))
+	if err != nil || len(profile) == 0 {
+		t.Fatalf("the browser was not started with a profile: %v", err)
+	}
+	if filepath.Dir(string(profile)) != root {
+		t.Errorf("profile %s is not under the profile root %s", profile, root)
+	}
+	if _, err := os.Stat(string(profile)); !os.IsNotExist(err) {
+		t.Errorf("the profile %s was left behind: %v", profile, err)
+	}
+
+	markerSize := func() int64 {
+		t.Helper()
+		info, err := os.Stat(marker)
+		if err != nil {
+			t.Fatalf("the wrapper's marker file: %v", err)
+		}
+		return info.Size()
+	}
+	first := markerSize()
+	time.Sleep(200 * time.Millisecond)
+	if grew := markerSize(); grew != first {
+		t.Errorf("the wrapper's background loop wrote %d bytes after the sign-in returned", grew-first)
 	}
 }
 
@@ -377,37 +442,173 @@ func TestBrowserKindNamesTheBrowsersOfEachSystem(t *testing.T) {
 	}
 }
 
-func TestFlatpakZenCandidatesKeepTheirProfileInTheirDataDirectory(t *testing.T) {
+func TestDefaultBrowserIDReadsTheDesktopFile(t *testing.T) {
 	if runtime.GOOS != "linux" {
-		t.Skip("the Flatpak wrapper is a Linux install")
+		t.Skip("xdg-settings is a Linux tool")
+	}
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "xdg-settings"), []byte("#!/bin/sh\necho 'App.Zen_Browser.Zen.Desktop'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	if got := defaultBrowserID(context.Background()); got != "app.zen_browser.zen.desktop" {
+		t.Errorf("defaultBrowserID = %q, want the lowercased desktop file", got)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if got := defaultBrowserID(context.Background()); got != "" {
+		t.Errorf("defaultBrowserID without xdg-settings = %q, want empty", got)
+	}
+}
+
+func TestFindBrowserTakesTheFlatpakInstallTheDefaultNames(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("xdg-settings and the Flatpak export path are Linux")
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	path := t.TempDir()
-	if err := os.WriteFile(filepath.Join(path, "flatpak"), []byte("#!/bin/sh\n"), 0o700); err != nil {
+	bin := t.TempDir()
+	t.Setenv("PATH", bin)
+	for name, body := range map[string]string{
+		"xdg-settings": "#!/bin/sh\necho org.mozilla.firefox.desktop\n",
+		"flatpak":      "#!/bin/sh\n",
+		"firefox":      "#!/bin/sh\n",
+	} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	export := filepath.Join(home, ".local", "share", "flatpak", "exports", "bin", "org.mozilla.firefox")
+	if err := os.MkdirAll(filepath.Dir(export), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", path)
-	wantHost := filepath.Join(home, ".var", "app", zenFlatpak, ".zen")
-	wantSandbox := filepath.Join(home, ".zen")
-	found := 0
-	for _, c := range firefoxCandidates() {
-		if c.flatpak == nil {
-			continue
-		}
-		found++
-		if c.kind != "zen" || c.family != firefoxFamily {
-			t.Errorf("flatpak candidate = %+v, want Zen", c)
-		}
-		if c.flatpak.host != wantHost {
-			t.Errorf("flatpak host = %s, want %s", c.flatpak.host, wantHost)
-		}
-		if c.flatpak.sandbox != wantSandbox {
-			t.Errorf("flatpak sandbox = %s, want %s", c.flatpak.sandbox, wantSandbox)
+	if err := os.WriteFile(export, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	b, ok := findBrowser(context.Background())
+	if !ok {
+		t.Fatal("findBrowser found no browser")
+	}
+	if b.path != export {
+		t.Errorf("findBrowser = %s, want the Flatpak install %s", b.path, export)
+	}
+	if want := filepath.Join(home, ".var", "app", "org.mozilla.firefox", "data"); b.profileRoot != want {
+		t.Errorf("profileRoot = %s, want %s", b.profileRoot, want)
+	}
+}
+
+func TestLinuxCandidatesCoverNativeFlatpakAndSnapInstalls(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the Flatpak and Snap install kinds are Linux installs")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bin := t.TempDir()
+	for _, name := range []string{"flatpak", "snap"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0o700); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if found != 2 {
-		t.Errorf("found %d Flatpak Zen candidates, want 2", found)
+	t.Setenv("PATH", bin)
+
+	byPath := map[string]candidate{}
+	for _, c := range browserCandidates() {
+		byPath[c.path] = c
+	}
+
+	flatpaks := []struct {
+		kind   string
+		family browserFamily
+		id     string
+	}{
+		{"chrome", chromiumFamily, "com.google.Chrome"},
+		{"chromium", chromiumFamily, "org.chromium.Chromium"},
+		{"edge", chromiumFamily, "com.microsoft.Edge"},
+		{"brave", chromiumFamily, "com.brave.Browser"},
+		{"vivaldi", chromiumFamily, "com.vivaldi.Vivaldi"},
+		{"firefox", firefoxFamily, "org.mozilla.firefox"},
+		{"zen", firefoxFamily, zenFlatpak},
+	}
+	for _, want := range flatpaks {
+		for _, root := range []string{
+			filepath.Join(home, ".local", "share", "flatpak", "exports", "bin"),
+			"/var/lib/flatpak/exports/bin",
+		} {
+			path := filepath.Join(root, want.id)
+			c, ok := byPath[path]
+			if !ok {
+				t.Errorf("no Flatpak %s candidate at %s", want.kind, path)
+				continue
+			}
+			if c.kind != want.kind || c.family != want.family {
+				t.Errorf("Flatpak candidate at %s is kind %s family %v, want %s and %v", path, c.kind, c.family, want.kind, want.family)
+			}
+			if wantRoot := filepath.Join(home, ".var", "app", want.id, "data"); c.profileRoot != wantRoot {
+				t.Errorf("Flatpak %s profileRoot = %s, want %s", want.kind, c.profileRoot, wantRoot)
+			}
+			if wantID := strings.ToLower(want.id) + ".desktop"; c.desktopID != wantID {
+				t.Errorf("Flatpak %s desktopID = %s, want %s", want.kind, c.desktopID, wantID)
+			}
+		}
+	}
+
+	snaps := []struct {
+		kind   string
+		family browserFamily
+		name   string
+	}{
+		{"chromium", chromiumFamily, "chromium"},
+		{"firefox", firefoxFamily, "firefox"},
+	}
+	for _, want := range snaps {
+		path := filepath.Join("/snap/bin", want.name)
+		c, ok := byPath[path]
+		if !ok {
+			t.Errorf("no Snap %s candidate at %s", want.kind, path)
+			continue
+		}
+		if c.kind != want.kind || c.family != want.family {
+			t.Errorf("Snap candidate at %s is kind %s family %v, want %s and %v", path, c.kind, c.family, want.kind, want.family)
+		}
+		if wantRoot := filepath.Join(home, "snap", want.name, "common"); c.profileRoot != wantRoot {
+			t.Errorf("Snap %s profileRoot = %s, want %s", want.kind, c.profileRoot, wantRoot)
+		}
+		if wantID := want.name + "_" + want.name + ".desktop"; c.desktopID != wantID {
+			t.Errorf("Snap %s desktopID = %s, want %s", want.kind, c.desktopID, wantID)
+		}
+	}
+
+	for _, name := range []string{
+		"google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
+		"microsoft-edge", "microsoft-edge-stable", "brave-browser", "brave",
+		"vivaldi", "vivaldi-stable", "helium", "helium-browser",
+		"firefox", "zen", "zen-browser",
+	} {
+		c, ok := byPath[name]
+		if !ok {
+			t.Errorf("no native candidate for %s", name)
+			continue
+		}
+		if c.profileRoot != "" || c.desktopID != "" {
+			t.Errorf("native candidate %s carries a profile root or desktop file: %+v", name, c)
+		}
+	}
+}
+
+func TestLinuxCandidatesNeedTheFlatpakAndSnapTools(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the Flatpak and Snap install kinds are Linux installs")
+	}
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	candidates := browserCandidates()
+	if len(candidates) == 0 {
+		t.Fatal("no native candidates were built")
+	}
+	for _, c := range candidates {
+		if c.profileRoot != "" || c.desktopID != "" {
+			t.Errorf("candidate %+v appeared without flatpak or snap on PATH", c)
+		}
 	}
 }
 
@@ -447,12 +648,47 @@ func TestPreferringPutsTheDefaultBrowserFirst(t *testing.T) {
 		{kind: "brave", path: "c"},
 		{kind: "edge", path: "d"},
 	}
-	got := preferring(all, "edge")
-	if want := []string{"b", "d", "a", "c"}; len(got) != 4 || got[0].path != want[0] || got[1].path != want[1] || got[2].path != want[2] || got[3].path != want[3] {
+	got := preferring(all, "", "edge")
+	if want := []string{"b", "d", "a", "c"}; !samePaths(got, want) {
 		t.Errorf("preferring = %v, want order %v", got, want)
 	}
 	// A default that is not one of these, or not installed, changes nothing.
-	if got := preferring(all, ""); got[0].path != "a" || got[3].path != "d" {
+	if got := preferring(all, "", ""); !samePaths(got, []string{"a", "b", "c", "d"}) {
 		t.Errorf("no default changed the order: %v", got)
 	}
+
+	// The exact .desktop file the system named wins over another install of
+	// the same browser; without one, every candidate of the named kind moves
+	// up and keeps its order.
+	installs := []candidate{
+		{kind: "firefox", path: "native"},
+		{kind: "firefox", path: "flatpak", desktopID: "org.mozilla.firefox.desktop"},
+		{kind: "firefox", path: "snap", desktopID: "firefox_firefox.desktop"},
+		{kind: "chrome", path: "chrome"},
+	}
+	got = preferring(installs, "org.mozilla.firefox.desktop", "firefox")
+	if want := []string{"flatpak", "native", "snap", "chrome"}; !samePaths(got, want) {
+		t.Errorf("a Flatpak default gave %v, want order %v", got, want)
+	}
+	got = preferring(installs, "firefox_firefox.desktop", "firefox")
+	if want := []string{"snap", "native", "flatpak", "chrome"}; !samePaths(got, want) {
+		t.Errorf("a Snap default gave %v, want order %v", got, want)
+	}
+	got = preferring(installs, "firefox.desktop", "firefox")
+	if want := []string{"native", "flatpak", "snap", "chrome"}; !samePaths(got, want) {
+		t.Errorf("a native default gave %v, want order %v", got, want)
+	}
+}
+
+// samePaths compares the paths of candidates in order.
+func samePaths(got []candidate, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i, c := range got {
+		if c.path != want[i] {
+			return false
+		}
+	}
+	return true
 }

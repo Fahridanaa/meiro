@@ -124,8 +124,9 @@ session from that window, closes it, and deletes its profile.
 Meiro opens the window in your system's default browser when that browser is
 Chrome, Edge, Brave, Helium, Chromium, Vivaldi, Firefox or Zen. If your
 default browser is something else, such as Safari, Meiro uses the first of
-those browsers that it finds installed. Firefox and Zen need yt-dlp on PATH,
-which Meiro also needs for playback.
+those browsers that it finds installed. A Firefox or Zen default that it
+cannot find falls back to the first Chromium-based browser it finds. Firefox
+and Zen need yt-dlp on PATH, which Meiro also needs for playback.
 
 YouTube Music has no sign-in that lets another app act for you. Meiro does not
 use an app-scoped OAuth token, so the session has the same account access as a
@@ -143,8 +144,6 @@ browser session. Treat it like a password.
   that the page does not report itself as automated. Google can still decide
   to refuse, and it can change its checks at any time. If it refuses, use one
   of the other ways below.
-- **Linux Snap and Flatpak browsers may not work.** They can be blocked from
-  the temporary profile folder that Meiro uses.
 - **The window is not your browser.** Your bookmarks, extensions, saved
   passwords and other sessions are not there. You may need to complete a
   second-factor step.
