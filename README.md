@@ -125,8 +125,9 @@ Meiro opens the window in your system's default browser when that browser is
 Chrome, Edge, Brave, Helium, Chromium, Vivaldi, Firefox or Zen. If your
 default browser is something else, such as Safari, Meiro uses the first of
 those browsers that it finds installed. A Firefox or Zen default that it
-cannot find falls back to the first Chromium-based browser it finds. Firefox
-and Zen need yt-dlp on PATH, which Meiro also needs for playback.
+cannot find, or cannot read because yt-dlp is missing, falls back to the first
+Chromium-based browser it finds. Firefox and Zen need yt-dlp on PATH, which
+Meiro also needs for playback.
 
 YouTube Music has no sign-in that lets another app act for you. Meiro does not
 use an app-scoped OAuth token, so the session has the same account access as a

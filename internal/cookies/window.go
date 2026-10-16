@@ -21,6 +21,10 @@ import (
 // installed.
 var ErrNoBrowser = errors.New("no Chrome, Edge, Brave, Helium, Vivaldi, Chromium, Firefox or Zen browser was found")
 
+// errFirefoxNeedsYtDlp reports that a Firefox or Zen browser is installed,
+// but yt-dlp is missing, so its session cannot be read.
+var errFirefoxNeedsYtDlp = errors.New("signing in with Firefox or Zen needs yt-dlp on PATH")
+
 // ErrWindowClosed reports that the user closed the sign-in window before the
 // sign-in finished.
 var ErrWindowClosed = errors.New("the sign-in window was closed before you finished signing in")
@@ -34,9 +38,22 @@ var errWindowGone = errors.New("the sign-in window is gone")
 // password and a second factor.
 const SignInTimeout = 5 * time.Minute
 
-// maxFirefoxReadFailures is how many polls in a row may fail to read a
-// Firefox profile before the sign-in reports the error.
-const maxFirefoxReadFailures = 3
+// firefoxRetry paces the Firefox profile read.
+type firefoxRetry struct {
+	// recheck is how long a read result of "not signed in" stays trusted
+	// while the profile looks unchanged. A filesystem can record two writes
+	// in one timestamp tick, so timestamps alone can miss a new cookie.
+	recheck time.Duration
+	// grace is how long a run of failed reads may last before the sign-in
+	// reports the error. A profile that is briefly locked or slow recovers
+	// on its own.
+	grace time.Duration
+}
+
+const (
+	firefoxReadRecheck = 5 * time.Second
+	firefoxReadGrace   = 30 * time.Second
+)
 
 // WindowOptions are the settings of a sign-in window. The zero value is the
 // real sign-in; tests change the rest.
@@ -64,6 +81,9 @@ type WindowOptions struct {
 	// for the real sign-in, which reads the profile the way an import
 	// does, through yt-dlp; tests replace it so they need no yt-dlp.
 	read profileReader
+	// retry paces the Firefox profile read. The zero value is the real
+	// pacing; tests shorten it.
+	retry firefoxRetry
 }
 
 // SignInWindow has the user sign in to YouTube Music in a browser window of
@@ -86,16 +106,26 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 	if options.Settle == 0 {
 		options.Settle = 3 * time.Second
 	}
-	b, ok := options.browser(ctx)
-	if !ok {
-		return "", ErrNoBrowser
+	if options.retry.recheck == 0 {
+		options.retry.recheck = firefoxReadRecheck
+	}
+	if options.retry.grace == 0 {
+		options.retry.grace = firefoxReadGrace
 	}
 	read := options.read
+	canReadFirefox := read != nil || ytDlpAvailable()
+	b, ok := options.browser(ctx, canReadFirefox)
+	if !ok {
+		if !canReadFirefox && installedFirefox(ctx) {
+			return "", errFirefoxNeedsYtDlp
+		}
+		return "", ErrNoBrowser
+	}
 	if b.family == firefoxFamily && read == nil {
 		// A Firefox window is read the way an import is, through yt-dlp;
 		// say so now, while there is no window to clean up yet.
 		if _, err := proc.Tool("yt-dlp"); err != nil {
-			return "", errors.New("signing in with Firefox or Zen needs yt-dlp on PATH")
+			return "", errFirefoxNeedsYtDlp
 		}
 		read = firefoxProfileCookie
 	}
@@ -130,7 +160,7 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 		<-exited
 	}()
 
-	w, err := b.open(ctx, profile, exited, read)
+	w, err := b.open(ctx, profile, exited, read, options.retry)
 	if err != nil {
 		return "", err
 	}
@@ -144,12 +174,13 @@ func SignInWindow(ctx context.Context, options WindowOptions) (string, error) {
 
 // browser is the browser to open the sign-in window in: the executable the
 // options name, which a test stands in with, or the one found on this
-// machine.
-func (o WindowOptions) browser(ctx context.Context) (candidate, bool) {
+// machine. canReadFirefox says whether a Firefox-family browser's profile can
+// be read, which a found browser must be able to do.
+func (o WindowOptions) browser(ctx context.Context, canReadFirefox bool) (candidate, bool) {
 	if o.Executable != "" {
 		return candidate{family: o.family, path: o.Executable, profileRoot: o.profileRoot}, true
 	}
-	return findBrowser(ctx)
+	return findBrowser(ctx, canReadFirefox)
 }
 
 // firefoxProfileCookie reads a profile through yt-dlp, as an import does.
@@ -157,14 +188,28 @@ func firefoxProfileCookie(ctx context.Context, profile string) (string, error) {
 	return ytDlpCookie(ctx, "firefox:"+profile)
 }
 
+// ytDlpAvailable reports whether yt-dlp is on this machine.
+func ytDlpAvailable() bool {
+	_, err := proc.Tool("yt-dlp")
+	return err == nil
+}
+
 // writeFirefoxPreferences turns off the first-run pages a fresh profile would
 // open over the sign-in page. Chromium gets the same from --no-first-run and
 // --no-default-browser-check. Zen shows a welcome screen of its own until its
 // preference is set.
+//
+// The cookie write-ahead log is capped at one page. Firefox keeps a fresh
+// cookie in cookies.sqlite-wal until the log passes
+// network.cookie.db.maxWalBytes, and yt-dlp copies only cookies.sqlite, so
+// the sign-in would miss the cookie it just made. Firefox checkpoints every
+// maxWalBytes / page size pages and its page size is 32768, so one page
+// checkpoints after every write.
 func writeFirefoxPreferences(profile, kind string) error {
 	prefs := `user_pref("browser.aboutwelcome.enabled", false);
 user_pref("browser.shell.checkDefaultBrowser", false);
 user_pref("browser.startup.homepage_override.mstone", "ignore");
+user_pref("network.cookie.db.maxWalBytes", 32768);
 `
 	if kind == "zen" {
 		prefs += "user_pref(\"zen.welcome-screen.seen\", true);\n"
@@ -244,14 +289,27 @@ func (b candidate) privateProfile() (string, error) {
 	if err := os.MkdirAll(b.profileRoot, 0o700); err != nil {
 		return "", err
 	}
-	proc.SweepStale(b.profileRoot, signinProfilePrefix)
+	proc.SweepStale(b.profileRoot, browserHoldsProfile, signinProfilePrefix)
 	return os.MkdirTemp(b.profileRoot, signinProfilePrefix)
+}
+
+// browserHoldsProfile reports whether a browser is still using the throwaway
+// profile at path. Firefox writes a lock symlink and a Chromium browser
+// writes SingletonLock; both go away when the browser exits. A profile a
+// browser still holds must not be swept out from under it.
+func browserHoldsProfile(path string) bool {
+	for _, name := range []string{"lock", "SingletonLock"} {
+		if _, err := os.Lstat(filepath.Join(path, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 // open returns the way to read the session of a browser started on profile,
 // once it is reachable. exited closes when the browser process ends. read is
 // the Firefox-family profile reader; a Chromium window does not use it.
-func (b candidate) open(ctx context.Context, profile string, exited <-chan struct{}, read profileReader) (*browserWindow, error) {
+func (b candidate) open(ctx context.Context, profile string, exited <-chan struct{}, read profileReader, retry firefoxRetry) (*browserWindow, error) {
 	switch b.family {
 	case chromiumFamily:
 		port, path, err := waitDebugPort(ctx, profile, exited)
@@ -288,33 +346,41 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 		// The reader runs yt-dlp, which makes a request of its own, so ask
 		// it again only after the profile's cookie store changes.
 		var readAt time.Time
+		var readTime time.Time
+		var failedAt time.Time
 		var cached string
-		failures := 0
 		return &browserWindow{
 			read: func(ctx context.Context) (string, error) {
 				changedAt := cookieDatabaseModTime(profile)
 				if changedAt.IsZero() {
 					return "", nil
 				}
-				if changedAt.After(readAt) {
-					// A window that cannot be read yet is not a closed window;
-					// its process ending is what closes it. A failed read leaves
-					// readAt alone so the next poll tries again, and only a run
-					// of failures reports the error.
-					header, err := read(ctx, profile)
-					if err != nil {
-						failures++
-						if failures >= maxFirefoxReadFailures {
-							return "", err
-						}
-						return "", nil
+				if !changedAt.After(readAt) && (cached != "" || time.Since(readTime) < retry.recheck) {
+					return cached, nil
+				}
+				readTime = time.Now()
+				// A window that cannot be read yet is not a closed window; its
+				// process ending is what closes it. A failed read leaves readAt
+				// alone so the next poll tries again, and only a run of failures
+				// that outlasts the grace reports the error.
+				header, err := readFirefox(ctx, read, profile, exited)
+				if err != nil {
+					if errors.Is(err, errWindowGone) {
+						return "", err
 					}
-					failures = 0
-					readAt = changedAt
-					cached = ""
-					if strings.Contains(header, "SAPISID=") {
-						cached = header
+					if failedAt.IsZero() {
+						failedAt = time.Now()
 					}
+					if time.Since(failedAt) >= retry.grace {
+						return "", err
+					}
+					return "", nil
+				}
+				failedAt = time.Time{}
+				readAt = changedAt
+				cached = ""
+				if strings.Contains(header, "SAPISID=") {
+					cached = header
 				}
 				return cached, nil
 			},
@@ -322,6 +388,31 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 		}, nil
 	default:
 		panic("unknown browser family")
+	}
+}
+
+// readFirefox runs the profile reader in the background while the poll loop
+// keeps watching the window. yt-dlp makes a request of its own, so a slow
+// one must not stop the loop from noticing a window the user closed.
+func readFirefox(ctx context.Context, read profileReader, profile string, exited <-chan struct{}) (string, error) {
+	type answer struct {
+		header string
+		err    error
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan answer, 1)
+	go func() {
+		header, err := read(ctx, profile)
+		done <- answer{header, err}
+	}()
+	select {
+	case got := <-done:
+		return got.header, got.err
+	case <-exited:
+		return "", errWindowGone
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 }
 
@@ -435,6 +526,15 @@ type browserWindow struct {
 	quit func(ctx context.Context)
 }
 
+// installKind is how a browser is installed on this machine.
+type installKind uint8
+
+const (
+	installNative installKind = iota
+	installFlatpak
+	installSnap
+)
+
 // candidate is a browser that may open the sign-in window.
 type candidate struct {
 	// kind names the browser for default-browser preference.
@@ -449,6 +549,11 @@ type candidate struct {
 	// Flatpak mounts ~/.var/app/<id> and Snap ~/snap/<name> at the same path
 	// on both sides.
 	profileRoot string
+	// install is how this browser is installed.
+	install installKind
+	// appID is the Flatpak application ID or Snap name, "" for a native
+	// install.
+	appID string
 	// desktopID is the .desktop file of this install on Linux, "" for a
 	// native one. Flatpak exports <flatpakID>.desktop, Snap
 	// <snapName>_<snapName>.desktop.
@@ -457,14 +562,29 @@ type candidate struct {
 
 // findBrowser is the browser to open the sign-in window in: the user's
 // default browser when it is one of these, and otherwise the first installed.
-func findBrowser(ctx context.Context) (candidate, bool) {
+// A Firefox-family browser is skipped unless canReadFirefox says its profile
+// can be read.
+func findBrowser(ctx context.Context, canReadFirefox bool) (candidate, bool) {
 	id := defaultBrowserID(ctx)
 	for _, c := range preferring(browserCandidates(), id, browserKind(id)) {
-		if c.installed() {
+		if !canReadFirefox && c.family == firefoxFamily {
+			continue
+		}
+		if c.installed(ctx) {
 			return c, true
 		}
 	}
 	return candidate{}, false
+}
+
+// installedFirefox reports whether any Firefox-family browser is installed.
+func installedFirefox(ctx context.Context) bool {
+	for _, c := range browserCandidates() {
+		if c.family == firefoxFamily && c.installed(ctx) {
+			return true
+		}
+	}
+	return false
 }
 
 // browserCandidates lists the browsers of this system, Chromium-based ones
@@ -483,46 +603,50 @@ func browserCandidates() []candidate {
 }
 
 // installed reports whether the browser is on this machine. An absolute path
-// is checked as it is; anything else is a command on PATH.
-func (b candidate) installed() bool {
+// is checked as it is; anything else is a command on PATH. The package
+// manager is asked as well, because an export or snap link can outlive an
+// uninstall and must not win over a working native browser.
+func (b candidate) installed(ctx context.Context) bool {
 	if filepath.IsAbs(b.path) {
 		info, err := os.Stat(b.path)
-		return err == nil && !info.IsDir()
+		if err != nil || info.IsDir() {
+			return false
+		}
+	} else if _, err := exec.LookPath(b.path); err != nil {
+		return false
 	}
-	_, err := exec.LookPath(b.path)
-	return err == nil
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	switch b.install {
+	case installFlatpak:
+		return proc.Command(ctx, "flatpak", "info", b.appID).Run() == nil
+	case installSnap:
+		return proc.Command(ctx, "snap", "list", b.appID).Run() == nil
+	case installNative:
+	}
+	return true
 }
 
-// preferring puts the browser the default names first. An exact .desktop
-// match wins, so the Flatpak or Snap install the system named is preferred
-// over another install of the same browser. With no exact match, every
-// candidate of the named kind moves up, which is how a native install, a
-// macOS bundle ID and a Windows ProgID resolve.
+// preferring puts the browser the default names first: an exact .desktop
+// match, then every candidate of the named kind, then the rest in table
+// order. The named kind moves up whole so a native install, a macOS bundle ID
+// and a Windows ProgID all resolve, and so a gone Flatpak or Snap install
+// does not hide the native one behind it.
 func preferring(all []candidate, desktopID, kind string) []candidate {
-	if desktopID != "" {
-		var named, rest []candidate
-		for _, c := range all {
-			if c.desktopID == desktopID {
-				named = append(named, c)
-			} else {
-				rest = append(rest, c)
-			}
-		}
-		if len(named) > 0 {
-			return append(named, rest...)
-		}
-	}
-	if kind == "" {
-		return all
-	}
+	named := func(c candidate) bool { return desktopID != "" && c.desktopID == desktopID }
 	out := make([]candidate, 0, len(all))
 	for _, c := range all {
-		if c.kind == kind {
+		if named(c) {
 			out = append(out, c)
 		}
 	}
 	for _, c := range all {
-		if c.kind != kind {
+		if !named(c) && c.kind == kind {
+			out = append(out, c)
+		}
+	}
+	for _, c := range all {
+		if !named(c) && c.kind != kind {
 			out = append(out, c)
 		}
 	}
@@ -731,6 +855,8 @@ func linuxCandidates(table []browserSpec) []candidate {
 					path:        filepath.Join(root, spec.flatpakID),
 					profileRoot: filepath.Join(home, ".var", "app", spec.flatpakID, "data"),
 					desktopID:   strings.ToLower(spec.flatpakID) + ".desktop",
+					install:     installFlatpak,
+					appID:       spec.flatpakID,
 				})
 			}
 		}
@@ -746,6 +872,8 @@ func linuxCandidates(table []browserSpec) []candidate {
 				path:        filepath.Join("/snap/bin", spec.snapName),
 				profileRoot: filepath.Join(home, "snap", spec.snapName, "common"),
 				desktopID:   strings.ToLower(spec.snapName+"_"+spec.snapName) + ".desktop",
+				install:     installSnap,
+				appID:       spec.snapName,
 			})
 		}
 	}
