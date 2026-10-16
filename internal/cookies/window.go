@@ -25,9 +25,18 @@ var ErrNoBrowser = errors.New("no Chrome, Edge, Brave, Helium, Vivaldi, Chromium
 // sign-in finished.
 var ErrWindowClosed = errors.New("the sign-in window was closed before you finished signing in")
 
+// errWindowGone marks a read that failed because the window is gone. A
+// Chromium window reports it when its connection drops; a Firefox window
+// is read from a file, and its process ending is what closes it.
+var errWindowGone = errors.New("the sign-in window is gone")
+
 // SignInTimeout is how long a sign-in window may stay open: time to type a
 // password and a second factor.
 const SignInTimeout = 5 * time.Minute
+
+// maxFirefoxReadFailures is how many polls in a row may fail to read a
+// Firefox profile before the sign-in reports the error.
+const maxFirefoxReadFailures = 3
 
 // WindowOptions are the settings of a sign-in window. The zero value is the
 // real sign-in; tests change the rest.
@@ -258,7 +267,7 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 			read: func(ctx context.Context) (string, error) {
 				all, err := tools.cookies(ctx)
 				if err != nil {
-					return "", err
+					return "", fmt.Errorf("%w: %w", errWindowGone, err)
 				}
 				if !hasSession(all) {
 					return "", nil
@@ -280,6 +289,7 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 		// it again only after the profile's cookie store changes.
 		var readAt time.Time
 		var cached string
+		failures := 0
 		return &browserWindow{
 			read: func(ctx context.Context) (string, error) {
 				changedAt := cookieDatabaseModTime(profile)
@@ -289,13 +299,21 @@ func (b candidate) open(ctx context.Context, profile string, exited <-chan struc
 				if changedAt.After(readAt) {
 					// A window that cannot be read yet is not a closed window;
 					// its process ending is what closes it. A failed read leaves
-					// readAt alone so the next poll tries again.
-					if header, err := read(ctx, profile); err == nil {
-						readAt = changedAt
-						cached = ""
-						if strings.Contains(header, "SAPISID=") {
-							cached = header
+					// readAt alone so the next poll tries again, and only a run
+					// of failures reports the error.
+					header, err := read(ctx, profile)
+					if err != nil {
+						failures++
+						if failures >= maxFirefoxReadFailures {
+							return "", err
 						}
+						return "", nil
+					}
+					failures = 0
+					readAt = changedAt
+					cached = ""
+					if strings.Contains(header, "SAPISID=") {
+						cached = header
 					}
 				}
 				return cached, nil
@@ -340,10 +358,10 @@ func waitSignIn(ctx context.Context, read func(context.Context) (string, error),
 		switch {
 		case err != nil && ctx.Err() != nil:
 			return "", windowContextError(ctx)
-		case err != nil:
-			// The connection drops when the user closes a Chromium window;
-			// the Firefox reader reports no error.
+		case errors.Is(err, errWindowGone):
 			return "", ErrWindowClosed
+		case err != nil:
+			return "", err
 		}
 		if header != "" {
 			if signedAt.IsZero() {
@@ -408,8 +426,9 @@ type profileReader func(ctx context.Context, profile string) (string, error)
 // browserWindow is a started sign-in window whose session can be read.
 type browserWindow struct {
 	// read returns the Cookie header of the session the window holds, ""
-	// while the user is not signed in. An error means the window cannot be
-	// reached, which is how a Chromium window the user closed shows.
+	// while the user is not signed in. A Chromium read fails when the
+	// connection drops, which is how a window the user closed shows; a
+	// Firefox read fails when the profile cannot be read.
 	read func(ctx context.Context) (string, error)
 	// quit lets the browser close politely before the deferred cancel stops
 	// it. A browser with no remote close does nothing here.
@@ -743,14 +762,14 @@ func darwinCandidates(table []browserSpec) []candidate {
 	var out []candidate
 	for _, root := range roots {
 		for _, spec := range table {
-			exec := spec.macExec
-			if exec == "" {
-				exec = spec.macApp
+			binary := spec.macExec
+			if binary == "" {
+				binary = spec.macApp
 			}
 			out = append(out, candidate{
 				kind:   spec.kind,
 				family: spec.family,
-				path:   filepath.Join(root, spec.macApp+".app", "Contents", "MacOS", exec),
+				path:   filepath.Join(root, spec.macApp+".app", "Contents", "MacOS", binary),
 			})
 		}
 	}

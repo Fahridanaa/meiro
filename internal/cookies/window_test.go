@@ -251,6 +251,47 @@ func TestSignInWindowFirefoxReportsAClosedWindow(t *testing.T) {
 	}
 }
 
+func TestSignInWindowReportsAStuckFirefoxRead(t *testing.T) {
+	readErr := errors.New("yt-dlp could not read the profile")
+	calls := 0
+	options := fakeFirefoxWindow(t, "firefox", func(context.Context, string) (string, error) {
+		calls++
+		return "", readErr
+	})
+	_, err := SignInWindow(context.Background(), options)
+	if !errors.Is(err, readErr) {
+		t.Fatalf("err = %v, want the reader's error", err)
+	}
+	if errors.Is(err, ErrWindowClosed) {
+		t.Errorf("err = %v, a read failure must not look like a closed window", err)
+	}
+	if calls != maxFirefoxReadFailures {
+		t.Errorf("the reader ran %d times, want %d", calls, maxFirefoxReadFailures)
+	}
+}
+
+func TestSignInWindowRetriesAFirefoxRead(t *testing.T) {
+	readErr := errors.New("yt-dlp failed once")
+	calls := 0
+	options := fakeFirefoxWindow(t, "firefox", func(context.Context, string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "", readErr
+		}
+		return "SAPISID=live; SID=session", nil
+	})
+	got, err := SignInWindow(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "SAPISID=live; SID=session"; got != want {
+		t.Errorf("header = %q, want %q", got, want)
+	}
+	if calls < 2 {
+		t.Errorf("the reader ran %d times, want a retry after the failure", calls)
+	}
+}
+
 func TestSignInWindowFirefoxNeedsYtDlp(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	options := fakeFirefoxWindow(t, "firefox", nil)
@@ -308,6 +349,7 @@ func TestPrivateProfileUsesItsProfileRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.RemoveAll(profile) })
 	if filepath.Dir(filepath.Dir(profile)) != filepath.Clean(os.TempDir()) {
 		t.Errorf("native profile %s is not in the app's private temporary directory", profile)
 	}
