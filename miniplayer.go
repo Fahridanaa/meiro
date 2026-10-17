@@ -24,6 +24,9 @@ const (
 // in a flyout of the tray, a window of its own, from the same state as the
 // main window.
 func (a *app) miniPlayer(c *ui.Context) {
+	// The main window may be hidden, so it is not the only frame that follows
+	// the artwork.
+	a.followArtwork()
 	m3.Provide(c, a.resolveTheme(c))
 	sc := m3.Of(c).Scheme
 	col := ui.Column(c.Key("mini")).Fill().Padding(16).Gap(12).Background(sc.SurfaceContainer)
