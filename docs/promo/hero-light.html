@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="hero.css">
+<style>
+.wordmark { top: 50px; width: 380px; }
+.tagline { top: 215px; font-size: 44px; font-weight: 600; letter-spacing: -.5px; }
+body { background: #f8fafc; }
+.glow { position: absolute; left: 0; right: 0; bottom: -200px; height: 620px;
+ background: radial-gradient(ellipse 50% 55% at 25% 55%, rgba(70,157,211,.6), transparent 70%), radial-gradient(ellipse 50% 55% at 75% 55%, rgba(255,140,180,.6), transparent 70%); filter: blur(40px); }
+.tagline { color: #2a2f3a; } .tagline b { color: var(--rose); }
+.a { left: 40px; top: 480px; width: 560px; transform: rotate(-12deg); }
+.b { right: 40px; top: 480px; width: 560px; transform: rotate(12deg); }
+.d { left: 160px; top: 550px; width: 520px; transform: rotate(-6deg); z-index: 2; }
+.e { right: 160px; top: 550px; width: 520px; transform: rotate(6deg); z-index: 2; }
+.c { left: 270px; top: 440px; width: 1060px; z-index: 3; }
+
+.chips { position: absolute; top: 310px; left: 0; right: 0; display: flex; justify-content: center; gap: 14px; z-index: 10; }
+.chip { font-size: 22px; padding: 11px 20px; white-space: nowrap; background: #fff; color: #223; box-shadow: 0 4px 16px rgba(30,40,80,.14); }
+</style>
+<div class="glow"></div>
+<img class="wordmark" src="../brand/wordmark-light.svg">
+<div class="tagline">YouTube Music, <b>without the bloat.</b></div>
+<img class="shot a" src="../screenshots/library.png"><img class="shot b" src="../screenshots/explore.png"><img class="shot d" src="../screenshots/home.png"><img class="shot e" src="../screenshots/lyrics.png"><img class="shot c" src="../screenshots/player.png">
+<div class="chips"><span class="chip"><i class=dot></i>Takes only ~100 MB</span><span class="chip">Synced lyrics</span><span class="chip">Keeps playing when closed</span><span class="chip">Dynamic colours from your song</span></div>

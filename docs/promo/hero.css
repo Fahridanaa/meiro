@@ -1,0 +1,14 @@
+@font-face { font-family: "Google Sans"; src: url("../../fonts/GoogleSans.ttf"); font-weight: 100 900; }
+:root {
+  --blue: #3388bb; --blue-hi: #469dd3; --blue-lo: #1f5c8c;
+  --rose: #943a5b; --rose-soft: #ffd9e3; --paper: #fff4f6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1600px; height: 1000px; overflow: hidden; }
+body { font-family: "Google Sans", system-ui, sans-serif; position: relative; color: #1b1b1f; }
+img { display: block; }
+.shot { position: absolute; border-radius: 18px; filter: drop-shadow(0 30px 40px rgba(20,30,60,.28)) drop-shadow(0 4px 8px rgba(20,30,60,.18)); }
+.wordmark { position: absolute; left: 50%; transform: translateX(-50%); }
+.tagline { position: absolute; left: 0; right: 0; text-align: center; font-weight: 500; }
+.chip { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 999px; font-weight: 600; font-size: 24px; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: #2ecc71; box-shadow: 0 0 0 5px rgba(46,204,113,.25); }

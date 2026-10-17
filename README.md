@@ -5,8 +5,19 @@
   </picture>
 </h1>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/promo/hero-dark.png">
+    <img alt="Meiro: YouTube Music, without the bloat. Takes only about 100 MB, synced lyrics, keeps playing when closed, dynamic colours from your song." src="docs/promo/hero-light.png" width="800">
+  </picture>
+</p>
+
 A native desktop player for YouTube Music. Meiro draws its own interface in a
 native window instead of using a Chromium-based web front end.
+
+Meiro is very lightweight. It uses about 100 MB of RAM most of the time, and
+can go as low as about 99 MB, because there is no browser engine behind the
+interface.
 
 > **Beta, and unofficial.** Meiro is an independent project. It is not made,
 > endorsed or supported by YouTube or Google, and it uses YouTube's private web
@@ -27,6 +38,13 @@ half of the title.
 
 ## Features
 
+- **Stay light.** Meiro uses about 100 MB of RAM most of the time, and can go
+  as low as about 99 MB. It draws its own interface, so it carries no
+  Chromium.
+- **Play in the background.** Close the window and the music keeps playing.
+  The tray icon opens a small custom player with the track, a seek bar,
+  shuffle, previous, play or pause, next, and repeat, plus buttons to open
+  Meiro or quit.
 - **Browse.** View your Home feed and Explore, then open artist, album, and
   playlist pages. Sign in to view your Library.
 - **Search.** Search from the bar at the top of every page, and narrow the
