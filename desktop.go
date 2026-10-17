@@ -78,12 +78,14 @@ func (d *desktop) invalidateMini() {
 	}
 }
 
-// bringToFront restores the window and takes the focus, for a second launch,
-// a deep link or a notification click.
+// bringToFront shows the window when closing it hid it, restores it when it
+// is minimized, and takes the focus, for a second launch, a deep link, a
+// notification click or the mini player's Open Meiro button.
 func (d *desktop) bringToFront() {
 	if d == nil {
 		return
 	}
+	d.win.Show()
 	d.win.Restore()
 	d.win.Focus()
 }
@@ -297,6 +299,11 @@ func (a *app) setupDesktop() {
 	})
 	mygo.Power.OnSuspend(func() { a.update(a.onSuspend) })
 	mygo.Power.OnResume(func() { a.update(a.onResume) })
+	mygo.App.OnActivate(func(visible bool) {
+		if !visible {
+			a.update(a.desktop.bringToFront)
+		}
+	})
 	mygo.App.OnDidBecomeActive(func() { mygo.ClearNotifications() })
 	a.desktop.closeToTray(func() *bool { return a.settings.CloseToTray }, a.setCloseToTray)
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.desktop.quitting = true })

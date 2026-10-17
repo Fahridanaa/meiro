@@ -13,6 +13,10 @@ and this project adheres to
 - **The tray player no longer stretches when you show or hide up next.** The
   player now opens again at the new size, so its content stays sharp.
 
+- **The window opens again after you close it to the tray.** Open Meiro in the
+  mini player, a second launch, a notification and a Dock click now show the
+  hidden window.
+
 ## [0.3.0] - 2026-10-16
 
 ### Added
