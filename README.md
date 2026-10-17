@@ -1,10 +1,3 @@
-<h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/wordmark-dark.svg">
-    <img alt="Meiro" src="docs/brand/wordmark-light.svg" width="300">
-  </picture>
-</h1>
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/promo/hero-dark.png">
