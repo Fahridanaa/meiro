@@ -14,6 +14,13 @@ and this project adheres to
   showed and hid them is gone, so the player keeps one size and no longer
   stretches or opens again.
 
+### Fixed
+
+- **The dynamic theme now follows the artwork when only the tray player is
+  open.** For many covers the tray player never took their colour, because it
+  loaded the picture at a different size than the theme reads. It now updates
+  without the main window.
+
 ## [0.3.1] - 2026-10-17
 
 ### Changed

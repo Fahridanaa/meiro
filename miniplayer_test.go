@@ -1,13 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/elianiva/meiro/internal/artwork"
 	"github.com/elianiva/meiro/internal/lrclib"
 	"github.com/elianiva/meiro/internal/playstate"
 )
@@ -117,4 +123,43 @@ func TestFailedLyricsLookupIsTriedAgain(t *testing.T) {
 	if calls != 2 || !tt.HasText("first words") {
 		t.Fatalf("the lookup was not tried again: %d calls, %q", calls, tt.Texts())
 	}
+}
+
+// redArt answers every picture with a solid red PNG.
+type redArt struct{}
+
+func (redArt) RoundTrip(request *http.Request) (*http.Response, error) {
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i], img.Pix[i+3] = 220, 255
+	}
+	var body bytes.Buffer
+	if err := png.Encode(&body, img); err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": {"image/png"}},
+		Body:       io.NopCloser(&body),
+		Request:    request,
+	}, nil
+}
+
+func TestMiniPlayerAloneTakesTheArtworkColour(t *testing.T) {
+	a := newTestApp(t)
+	a.thumbs = artwork.New(&http.Client{Transport: redArt{}}, func() {})
+	a.settings.Dynamic = true
+	a.queue.restore(playstate.State{Items: tracks("a"), Index: 0, RecStart: -1})
+	a.current = a.queue.current()
+	// A size-templated URL names a different picture for every size asked.
+	a.current.Thumbnail = "https://lh3.googleusercontent.com/cover=w544-h544"
+	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
+	for range 200 {
+		tt.Frame()
+		if a.theme.dynamicOK {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the mini player never took a colour from the artwork")
 }
