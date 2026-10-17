@@ -53,9 +53,9 @@ type nowPlayingState struct {
 	lyricsScroll ui.ScrollState
 	related      relatedState
 	relatedList  ui.ListState
-	// miniExpanded shows the side panel in the tray's mini player, which then
-	// loads what its tab shows as the full-screen player does.
-	miniExpanded bool
+	// miniOpen is whether the tray's mini player shows. Its side panel then
+	// loads what its tab shows, as the full-screen player's does.
+	miniOpen bool
 }
 
 // lyricsState is the lyrics of the track playing, as far as they are loaded.
@@ -99,11 +99,18 @@ func (a *app) openPlayer(tab panelTab, queueOnly bool) {
 	a.loadPanel()
 }
 
+// setMiniShown records that the mini player opened or closed, and loads its
+// panel when it opens.
+func (a *app) setMiniShown(open bool) {
+	a.nowPlaying.miniOpen = open
+	a.loadPanel()
+}
+
 // loadPanel starts the load behind the tab of the side panel that is showing.
 // Opening the panel, choosing a tab and starting a track call it; building the
 // view never does.
 func (a *app) loadPanel() {
-	if !a.nowPlaying.open && !a.nowPlaying.miniExpanded {
+	if !a.nowPlaying.open && !a.nowPlaying.miniOpen {
 		return
 	}
 	switch a.nowPlaying.tab {

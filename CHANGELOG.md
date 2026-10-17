@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **The tray player always shows up next, lyrics and related.** The button that
+  showed and hid them is gone, so the player keeps one size and no longer
+  stretches or opens again.
+
 ## [0.3.1] - 2026-10-17
 
 ### Changed

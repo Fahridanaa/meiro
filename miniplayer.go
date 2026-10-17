@@ -12,11 +12,11 @@ import (
 
 // Size of the tray's mini player in DIPs.
 const (
-	miniWidth  = 344
-	miniHeight = 268
-	// miniTallHeight is the height with the side panel open under the controls.
-	miniTallHeight = 640
-	miniArt        = 72
+	miniWidth = 344
+	miniArt   = 72
+	// miniHeight fits the controls and the side panel under them. It never
+	// changes: a native popover that resizes draws its content stretched.
+	miniHeight = 640
 )
 
 // miniPlayer is the panel of the tray icon: what plays, where it is, the
@@ -52,17 +52,8 @@ func (a *app) miniPlayer(c *ui.Context) {
 		})
 		a.scrubber(c)
 		a.transport(c, 52, 4)
-		if a.nowPlaying.miniExpanded {
-			a.sidePanel(c, false)
-		}
+		a.sidePanel(c, false)
 		ui.Row(c).Gap(8).Justify(ui.SpaceBetween).AlignItems(ui.Center).Children(func() {
-			icon, label := m3.IconExpandMore, "Show up next, lyrics and related"
-			if a.nowPlaying.miniExpanded {
-				icon, label = m3.IconExpandLess, "Hide up next, lyrics and related"
-			}
-			if m3.IconButton(c, m3.IconButtonSpec{Icon: icon, Label: label, Key: "mini-expand"}).Clicked() {
-				a.setMiniExpanded(!a.nowPlaying.miniExpanded)
-			}
 			if m3.Button(c, m3.ButtonSpec{Label: "Open Meiro", Kind: m3.Tonal, Key: "mini-open"}).Clicked() {
 				a.desktop.closeMini()
 				a.desktop.bringToFront()
@@ -74,60 +65,38 @@ func (a *app) miniPlayer(c *ui.Context) {
 	})
 }
 
-// setMiniExpanded opens or closes the side panel of the mini player, and
-// resizes its window to fit.
-func (a *app) setMiniExpanded(on bool) {
-	a.nowPlaying.miniExpanded = on
-	height := miniHeight
-	if on {
-		height = miniTallHeight
-		a.loadPanel()
-	}
-	a.desktop.resizeMini(height)
-}
-
 // mini is the mini player's window while it is open. The system closes it
 // on a press outside, so it is made anew each time it opens.
 type mini struct {
-	// tall is whether the side panel is open, so the next window opens at that
-	// height. Main thread only.
-	tall bool
-	// view draws the window; it is kept to open the window again at a new size.
-	view func(*ui.Context)
-	win  atomic.Pointer[mygo.Window]
+	win atomic.Pointer[mygo.Window]
 }
 
-// showMini opens the mini player next to the tray icon. A click on the icon
-// while it is open leaves it open. It runs on the main thread.
-func (d *desktop) showMini(view func(*ui.Context)) {
+// showMini opens the mini player next to the tray icon and reports it through
+// shown, and again with false when it closes. A click on the icon while it is
+// open leaves it open. It runs on the main thread.
+func (d *desktop) showMini(view func(*ui.Context), shown func(bool)) {
 	if d == nil || d.tray == nil {
 		return
 	}
 	if d.mini.win.Load() != nil {
 		return
 	}
-	d.mini.view = view
-	d.openMini()
-}
-
-// openMini opens the window at the height the side panel needs.
-func (d *desktop) openMini() {
-	height := miniHeight
-	if d.mini.tall {
-		height = miniTallHeight
-	}
 	fl := mygo.NewFlyout(mygo.FlyoutOptions{
 		Tray:      d.tray,
 		Placement: mygo.PlacementBottom,
 		Width:     miniWidth,
-		Height:    height,
+		Height:    miniHeight,
 		Focusable: true,
 		Shadow:    true,
 		Popover:   runtime.GOOS == "darwin",
-		Content:   ui.View(d.mini.view),
+		Content:   ui.View(view),
 	})
 	d.mini.win.Store(fl)
-	fl.OnClosed(func() { d.mini.win.CompareAndSwap(fl, nil) })
+	shown(true)
+	fl.OnClosed(func() {
+		d.mini.win.CompareAndSwap(fl, nil)
+		d.update(func() { shown(false) })
+	})
 }
 
 // closeMini closes the mini player if it is open.
@@ -137,26 +106,5 @@ func (d *desktop) closeMini() {
 	}
 	if fl := d.mini.win.Load(); fl != nil {
 		fl.Close()
-	}
-}
-
-// resizeMini sets the height of the mini player, for now if it is open and for
-// the next time. A native popover that resizes in place draws its old content
-// stretched while it animates, so an open window is replaced by one of the
-// new size.
-func (d *desktop) resizeMini(height int) {
-	if d == nil {
-		return
-	}
-	tall := height > miniHeight
-	if d.mini.tall == tall {
-		return
-	}
-	d.mini.tall = tall
-	if fl := d.mini.win.Swap(nil); fl != nil {
-		fl.Close()
-		if d.tray != nil && d.mini.view != nil {
-			d.openMini()
-		}
 	}
 }

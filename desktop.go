@@ -169,7 +169,7 @@ type trayState struct {
 // otherwise. A click on the icon opens the mini player, which holds what a
 // menu would. It changes the tooltip only when it changed: playback calls it
 // four times a second.
-func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context)) {
+func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context), shown func(bool)) {
 	if d == nil {
 		return
 	}
@@ -200,7 +200,7 @@ func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context)) {
 			d.trayFailed = true
 			return
 		}
-		tray.OnClick(func() { d.update(func() { d.showMini(mini) }) })
+		tray.OnClick(func() { d.update(func() { d.showMini(mini, shown) }) })
 		d.tray, d.trayShown = tray, state
 		return
 	}
@@ -316,7 +316,7 @@ func (a *app) setupDesktop() {
 // path that changes playback reaches it through syncSystemMedia.
 func (a *app) syncDesktop() {
 	a.desktop.keepAwake(a.loading() || (a.player.Active() && !a.player.Paused() && !a.player.Ended()))
-	a.desktop.setTray(a.settings.ShowTray, trayState{tip: a.trayTip()}, a.miniPlayer)
+	a.desktop.setTray(a.settings.ShowTray, trayState{tip: a.trayTip()}, a.miniPlayer, a.setMiniShown)
 }
 
 // syncShortcut registers the global shortcut as the settings say, and turns

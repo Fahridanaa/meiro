@@ -35,18 +35,12 @@ func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	}
 }
 
-func TestMiniPlayerExpandsToTabs(t *testing.T) {
+func TestMiniPlayerAlwaysShowsTabs(t *testing.T) {
 	a := newTestApp(t)
 	a.queue.restore(playstate.State{Items: tracks("a", "b"), Index: 0, RecStart: -1})
 	a.current = a.queue.current()
-	tt := ui.NewTester(a.miniPlayer, miniWidth, miniTallHeight)
-	tt.Frame()
-	if tt.HasText("Lyrics") {
-		t.Fatalf("tabs show before they are asked for: %q", tt.Texts())
-	}
-	if err := tt.Click("Show up next, lyrics and related"); err != nil {
-		t.Fatal(err)
-	}
+	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
+	a.setMiniShown(true)
 	tt.Frame()
 	if !tt.HasText("Lyrics") || !tt.HasText("Related") || !tt.HasText("Track b") {
 		t.Fatalf("the panel is not shown: %q", tt.Texts())
@@ -70,14 +64,13 @@ func TestLyricsSwitchBetweenSyncedAndStatic(t *testing.T) {
 	}
 	a.queue.restore(playstate.State{Items: tracks("a"), Index: 0, RecStart: -1})
 	a.current = a.queue.current()
-	tt := ui.NewTester(a.miniPlayer, miniWidth, miniTallHeight)
+	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
+	a.setMiniShown(true)
 	tt.Frame()
-	for _, label := range []string{"Show up next, lyrics and related", "Lyrics"} {
-		if err := tt.Click(label); err != nil {
-			t.Fatal(err)
-		}
-		tt.Frame()
+	if err := tt.Click("Lyrics"); err != nil {
+		t.Fatal(err)
 	}
+	tt.Frame()
 	if !tt.HasText("Synced") || !tt.HasText("Static") || !tt.HasText("first words") {
 		t.Fatalf("timed lyrics are not shown with their modes: %q", tt.Texts())
 	}
@@ -109,14 +102,13 @@ func TestFailedLyricsLookupIsTriedAgain(t *testing.T) {
 	}
 	a.queue.restore(playstate.State{Items: tracks("a"), Index: 0, RecStart: -1})
 	a.current = a.queue.current()
-	tt := ui.NewTester(a.miniPlayer, miniWidth, miniTallHeight)
+	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
+	a.setMiniShown(true)
 	tt.Frame()
-	for _, label := range []string{"Show up next, lyrics and related", "Lyrics"} {
-		if err := tt.Click(label); err != nil {
-			t.Fatal(err)
-		}
-		tt.Frame()
+	if err := tt.Click("Lyrics"); err != nil {
+		t.Fatal(err)
 	}
+	tt.Frame()
 	if !tt.HasText("Couldn't load lyrics. Try again in a moment.") || tt.HasText("No lyrics for this song.") {
 		t.Fatalf("a failed lookup is not told apart from no lyrics: %q", tt.Texts())
 	}

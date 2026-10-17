@@ -36,7 +36,7 @@ Preconditions:
 - **Real audio.** Make a tone with `ffmpeg -f lavfi -i sine=duration=3`, set `r.file`, click the track, then loop `a.poll()` and `time.Sleep(10ms)` until `a.player.Position()` passes 500ms and `a.player.Playing()` is true. Then `p.step("heard")`. Verified: position reaches 700ms in under half a second.
 - **Resume.** Mirror `TestPlaybackResumesWhereItWasLeft`. A second app on the same data comes back paused.
 - **Lyrics.** In the player panel, `Lyrics` loads YouTube Music's timed lines, then LRCLIB's (`a.lyricsSource`, stubbed to nothing in `newTestApp`; set it to return `lrclib.Lyrics`). A track with timed lines shows `Synced` and `Static` chips; `Static` saves `StaticLyrics`. The lit line follows `a.playbackPosition()`, so set `a.total` as well as `a.scrub`, or the position slider clamps it back to 0. Use a window wider than 1180 to see the panel beside the player.
-- **Mini player.** `ui.NewTester(a.miniPlayer, miniWidth, miniHeight)`. `Nothing playing` shows when idle. Its panel button is `Show up next, lyrics and related`.
+- **Mini player.** `ui.NewTester(a.miniPlayer, miniWidth, miniHeight)`. `Nothing playing` shows when idle. Its side panel is always shown; call `a.setMiniShown(true)` to load it, as opening the tray player does.
 
 ## Gotchas
 
