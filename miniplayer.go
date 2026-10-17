@@ -89,6 +89,8 @@ type mini struct {
 	// tall is whether the side panel is open, so the next window opens at that
 	// height. Main thread only.
 	tall bool
+	// view draws the window; it is kept to open the window again at a new size.
+	view func(*ui.Context)
 	win  atomic.Pointer[mygo.Window]
 }
 
@@ -101,6 +103,12 @@ func (d *desktop) showMini(view func(*ui.Context)) {
 	if d.mini.win.Load() != nil {
 		return
 	}
+	d.mini.view = view
+	d.openMini()
+}
+
+// openMini opens the window at the height the side panel needs.
+func (d *desktop) openMini() {
 	height := miniHeight
 	if d.mini.tall {
 		height = miniTallHeight
@@ -113,7 +121,7 @@ func (d *desktop) showMini(view func(*ui.Context)) {
 		Focusable: true,
 		Shadow:    true,
 		Popover:   runtime.GOOS == "darwin",
-		Content:   ui.View(view),
+		Content:   ui.View(d.mini.view),
 	})
 	d.mini.win.Store(fl)
 	fl.OnClosed(func() { d.mini.win.CompareAndSwap(fl, nil) })
@@ -129,13 +137,23 @@ func (d *desktop) closeMini() {
 	}
 }
 
-// resizeMini sets the size of the mini player, now if it is open and for the next time.
+// resizeMini sets the height of the mini player, for now if it is open and for
+// the next time. A native popover that resizes in place draws its old content
+// stretched while it animates, so an open window is replaced by one of the
+// new size.
 func (d *desktop) resizeMini(width, height int) {
 	if d == nil {
 		return
 	}
-	d.mini.tall = height > miniHeight
-	if fl := d.mini.win.Load(); fl != nil {
-		fl.SetSize(width, height)
+	tall := height > miniHeight
+	if d.mini.tall == tall {
+		return
+	}
+	d.mini.tall = tall
+	if fl := d.mini.win.Swap(nil); fl != nil {
+		fl.Close()
+		if d.tray != nil && d.mini.view != nil {
+			d.openMini()
+		}
 	}
 }

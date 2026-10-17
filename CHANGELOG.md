@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **The tray player no longer stretches when you show or hide up next.** The
+  player now opens again at the new size, so its content stays sharp.
+
 ## [0.3.0] - 2026-10-16
 
 ### Added
