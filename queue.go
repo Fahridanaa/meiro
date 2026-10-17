@@ -3,7 +3,9 @@ package main
 import (
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/elianiva/meiro/youtube"
 )
@@ -226,24 +228,53 @@ func (q *queue) regenerate() {
 // second or so.
 const sameSongTolerance = 3 * time.Second
 
-// noteVersion records the title and length of a track, so that another upload
-// of the same song can be told from a different song.
-func noteVersion(versions map[string][]time.Duration, item youtube.MusicItem) {
-	if d := parseDuration(item.Duration); d > 0 && item.Title != "" {
-		versions[item.Title] = append(versions[item.Title], d)
+// songID names a song by its title and artist, ignoring case,
+// spacing and punctuation, so that two uploads of it compare equal.
+type songID struct{ title, artist string }
+
+func songIDOf(item youtube.MusicItem) songID {
+	return songID{normalizeName(item.Title), normalizeName(item.Artist)}
+}
+
+// normalizeName lowercases text and keeps only its letters and digits.
+func normalizeName(text string) string {
+	var b strings.Builder
+	for _, r := range text {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(unicode.ToLower(r))
+		}
+	}
+	return b.String()
+}
+
+// noteVersion records the title, artist and length of a track, so that
+// another upload of the same song can be told from a different song. A track
+// of unknown length is recorded as zero.
+func noteVersion(versions map[songID][]time.Duration, item youtube.MusicItem) {
+	if key := songIDOf(item); key.title != "" {
+		versions[key] = append(versions[key], parseDuration(item.Duration))
 	}
 }
 
 // hasVersion reports whether the track is another upload of a song already
-// noted: the same title and nearly the same length.
-func hasVersion(versions map[string][]time.Duration, item youtube.MusicItem) bool {
-	d := parseDuration(item.Duration)
-	if d <= 0 {
+// noted: the same title and artist, and nearly the same length. When either
+// length is unknown, the same title and artist are enough.
+func hasVersion(versions map[songID][]time.Duration, item youtube.MusicItem) bool {
+	key := songIDOf(item)
+	if key.title == "" {
 		return false
 	}
-	return slices.ContainsFunc(versions[item.Title], func(o time.Duration) bool {
-		return (d - o).Abs() <= sameSongTolerance
+	d := parseDuration(item.Duration)
+	return slices.ContainsFunc(versions[key], func(o time.Duration) bool {
+		return d <= 0 || o <= 0 || (d-o).Abs() <= sameSongTolerance
 	})
+}
+
+// isVersion reports whether two tracks are uploads of the same song.
+func isVersion(a, b youtube.MusicItem) bool {
+	versions := map[songID][]time.Duration{}
+	noteVersion(versions, a)
+	return hasVersion(versions, b)
 }
 
 // appendGenerated adds the recommendations YouTube Music returned that the
@@ -252,7 +283,7 @@ func hasVersion(versions map[string][]time.Duration, item youtube.MusicItem) boo
 // the one playing.
 func (q *queue) appendGenerated(items []youtube.MusicItem) {
 	seen := make(map[string]struct{}, len(q.items)+min(len(items), autoplayQueueLimit+1))
-	versions := make(map[string][]time.Duration, len(q.items))
+	versions := make(map[songID][]time.Duration, len(q.items))
 	for _, queued := range q.items {
 		if queued.VideoID != "" {
 			seen[queued.VideoID] = struct{}{}
@@ -269,6 +300,15 @@ func (q *queue) appendGenerated(items []youtube.MusicItem) {
 		}
 		seen[item.VideoID] = struct{}{}
 		if hasVersion(versions, item) {
+			// A music version takes the place of a video of the same
+			// song that this batch recommended earlier.
+			if item.Kind == youtube.KindTrack {
+				if i := slices.IndexFunc(fresh, func(o youtube.MusicItem) bool {
+					return o.Kind != youtube.KindTrack && isVersion(o, item)
+				}); i >= 0 {
+					fresh[i] = item
+				}
+			}
 			continue
 		}
 		noteVersion(versions, item)

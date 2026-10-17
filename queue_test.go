@@ -192,3 +192,34 @@ func TestAppendGeneratedSkipsOtherUploadsOfSameSong(t *testing.T) {
 		t.Fatalf("queue %v", got)
 	}
 }
+
+// The same song listed twice is skipped even when the titles differ in case
+// or punctuation, or when one listing has no length.
+func TestAppendGeneratedSkipsSameTitleAndArtist(t *testing.T) {
+	q := newQueue()
+	q.replace(youtube.MusicItem{VideoID: "a", Title: "A", Duration: "1:00"}, nil, 0, "")
+	q.appendGenerated([]youtube.MusicItem{
+		{VideoID: "r1", Title: "Nostalgia", Artist: "Kenshi", Duration: "3:17"},
+		{VideoID: "r2", Title: "NOSTALGIA!", Artist: "kenshi", Duration: ""},
+		{VideoID: "r3", Title: "Nostalgia", Artist: "Another", Duration: "3:17"}, // another artist
+	})
+	if got := ids(q.items); !slices.Equal(got, []string{"a", "r1", "r3"}) {
+		t.Fatalf("queue %v", got)
+	}
+}
+
+// When a video and a music version of the same song are both recommended,
+// the music version is the one queued, in the video's place.
+func TestAppendGeneratedPrefersMusicVersionOverVideo(t *testing.T) {
+	q := newQueue()
+	q.replace(youtube.MusicItem{VideoID: "a", Title: "A", Duration: "1:00"}, nil, 0, "")
+	q.appendGenerated([]youtube.MusicItem{
+		{VideoID: "v1", Title: "Nostalgia", Artist: "Kenshi", Duration: "3:17", Kind: youtube.KindVideo},
+		{VideoID: "r2", Title: "Other", Duration: "2:00", Kind: youtube.KindTrack},
+		{VideoID: "t1", Title: "Nostalgia", Artist: "Kenshi", Duration: "3:16", Kind: youtube.KindTrack},
+		{VideoID: "v2", Title: "Other", Duration: "2:00", Kind: youtube.KindVideo},
+	})
+	if got := ids(q.items); !slices.Equal(got, []string{"a", "t1", "r2"}) {
+		t.Fatalf("queue %v", got)
+	}
+}

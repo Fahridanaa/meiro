@@ -10,6 +10,10 @@ and this project adheres to
 
 ### Fixed
 
+- **Auto-play no longer queues the same song twice.** Recommendations with the
+  same title and artist are skipped, even when their lengths are missing or the
+  title differs only in case or punctuation. When a song is recommended as both
+  a video and a music version, the music version is queued.
 - **The tray player no longer stretches when you show or hide up next.** The
   player now opens again at the new size, so its content stays sharp.
 
