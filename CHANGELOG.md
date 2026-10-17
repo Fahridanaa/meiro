@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-17
+
 ### Changed
 
 - **Settings is grouped under headings.** Cards now sit under Account,
