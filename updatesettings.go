@@ -81,12 +81,6 @@ func (a *app) desktopCard(c *ui.Context) {
 					a.settings.OpenAtLogin = on
 					a.desktop.setOpenAtLogin(on)
 				})
-			ui.Row(c).Gap(16).AlignItems(ui.Center).Padding(8, 0).Children(func() {
-				settingLabel(c, "Listening stats", "Plays per day, most played tracks and artists.").Grow(1)
-				if m3.Button(c, m3.ButtonSpec{Label: "Show stats", Kind: m3.Tonal, Size: m3.Medium56, Key: "show-stats"}).Clicked() {
-					a.navigate(routeStats)
-				}
-			})
 		})
 	})
 }

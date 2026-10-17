@@ -8,6 +8,13 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Settings is grouped under headings.** Cards now sit under Account,
+  Appearance and sound, System, Storage and privacy, and About and support.
+  Normalize loudness moved into Sound, and Show stats moved next to the
+  listening history.
+
 ### Fixed
 
 - **Auto-play no longer queues the same song twice.** Recommendations with the

@@ -31,41 +31,66 @@ var swatches = []struct{ name, hex string }{
 	{"Orchid", "#a73fc0"},
 }
 
-// settingsCards are the cards of the settings page, top to bottom.
-var settingsCards = []struct {
-	key  string
-	card func(a *app, c *ui.Context)
-}{
-	{"appearance", (*app).appearanceCard},
-	{"sound", (*app).soundCard},
-	{"cache", (*app).playbackCacheCard},
-	{"playback", (*app).playbackSettingsCard},
-	{"desktop", (*app).desktopCard},
-	{"history", (*app).historyCard},
-	{"lastfm", (*app).lastFMCard},
-	{"updates", (*app).updatesCard},
-	{"tools", (*app).toolsCard},
-	{"report", (*app).reportCard},
-	{"account", (*app).accountCard},
-	{"keyboard", (*app).keyboardCard},
-	{"logs", (*app).logsCard},
+// settingsRow is one row of the settings page: a section heading, or a card
+// under it.
+type settingsRow struct {
+	key     string
+	heading string                      // set for a heading
+	card    func(a *app, c *ui.Context) // set for a card
+}
+
+// settingsRows are the rows of the settings page, top to bottom. Cards that
+// answer the same question sit under one heading.
+var settingsRows = []settingsRow{
+	{key: "h-account", heading: "Account"},
+	{key: "account", card: (*app).accountCard},
+	{key: "lastfm", card: (*app).lastFMCard},
+
+	{key: "h-look", heading: "Appearance and sound"},
+	{key: "appearance", card: (*app).appearanceCard},
+	{key: "sound", card: (*app).soundCard},
+
+	{key: "h-system", heading: "System"},
+	{key: "desktop", card: (*app).desktopCard},
+	{key: "keyboard", card: (*app).keyboardCard},
+
+	{key: "h-data", heading: "Storage and privacy"},
+	{key: "cache", card: (*app).playbackCacheCard},
+	{key: "history", card: (*app).historyCard},
+
+	{key: "h-about", heading: "About and support"},
+	{key: "updates", card: (*app).updatesCard},
+	{key: "tools", card: (*app).toolsCard},
+	{key: "report", card: (*app).reportCard},
+	{key: "logs", card: (*app).logsCard},
 }
 
 // settingsPage is where the user chooses the colours of the app and manages
 // the account. Every control here restyles the whole window as it is used.
 //
-// The cards are the rows of a list, so only the ones in view are built, laid
+// The rows are the rows of a list, so only the ones in view are built, laid
 // out and painted: the page is long, and scrolling it rebuilds the frame.
 func (a *app) settingsPage(c *ui.Context) {
 	a.list.Key = func(i int) any {
-		if i >= len(settingsCards) {
+		if i >= len(settingsRows) {
 			return nil
 		}
-		return settingsCards[i].key
+		return settingsRows[i].key
 	}
-	ui.List(c, a.list, len(settingsCards), func(i int) {
+	ui.List(c, a.list, len(settingsRows), func(i int) {
+		row := settingsRows[i]
+		if row.card == nil {
+			top := float32(16)
+			if i == 0 {
+				top = 0
+			}
+			ui.Row(c).FillWidth().Padding(top, pageGutter, 12).Children(func() {
+				m3.EmphasizedText(c, m3.TitleMedium, row.heading).TextColor(m3.Of(c).Scheme.Primary)
+			})
+			return
+		}
 		ui.Column(c).FillWidth().Padding(0, pageGutter, 16).Children(func() {
-			settingsCards[i].card(a, c)
+			row.card(a, c)
 		})
 	}).Grow(1).Padding(0, 0, a.clearance()-16)
 }
@@ -163,24 +188,11 @@ func (a *app) appearanceCard(c *ui.Context) {
 	})
 }
 
-// playbackSettingsCard controls playback volume behavior.
-func (a *app) playbackSettingsCard(c *ui.Context) {
-	a.settingsCard(c, "Playback", m3.IconMusicNote, func() {
-		ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
-			settingLabel(c, "Normalize loudness", "Adjust track gain to keep songs at a more consistent volume. Requires a signed-in YouTube session.").Grow(1)
-			on := a.settings.NormalizeLoudness
-			if m3.Switch(c, &on, "Normalize loudness").Changed() {
-				a.setNormalizeLoudness(on)
-			}
-		})
-	})
-}
-
 // playbackCacheCard controls the number of recently played songs kept on
 // disk for replay without another network stream.
 func (a *app) playbackCacheCard(c *ui.Context) {
 	sc := m3.Of(c).Scheme
-	a.settingsCard(c, "Playback cache", m3.IconMusicNote, func() {
+	a.settingsCard(c, "Playback cache", m3.IconFolder, func() {
 		ui.Column(c).Gap(12).Children(func() {
 			settingLabel(c, "Keep recent songs", "Enter any non-negative whole number and press Enter to apply. Set 0 to turn the cache off. Older songs are removed first; each is kept in the format YouTube serves it, in a private Meiro cache folder.")
 			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
@@ -225,6 +237,13 @@ func (a *app) playbackCacheCard(c *ui.Context) {
 func (a *app) soundCard(c *ui.Context) {
 	sc := m3.Of(c).Scheme
 	a.settingsCard(c, "Sound", m3.IconVolumeUp, func() {
+		ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
+			settingLabel(c, "Normalize loudness", "Adjust track gain to keep songs at a more consistent volume. Requires a signed-in YouTube session.").Grow(1)
+			on := a.settings.NormalizeLoudness
+			if m3.Switch(c, &on, "Normalize loudness").Changed() {
+				a.setNormalizeLoudness(on)
+			}
+		})
 		ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
 			settingLabel(c, "Equaliser", "Shape ten bands of the sound. A change restarts the music where it is.").Grow(1)
 			on := a.settings.EQOn
