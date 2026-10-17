@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-17
+
 ### Changed
 
 - **The tray player always shows up next, lyrics and related.** The button that

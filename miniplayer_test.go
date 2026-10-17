@@ -138,7 +138,7 @@ func (redArt) RoundTrip(request *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	return &http.Response{
-		StatusCode: 200,
+		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": {"image/png"}},
 		Body:       io.NopCloser(&body),
 		Request:    request,
