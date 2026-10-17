@@ -19,6 +19,21 @@ interface.
 > updated. See [Known issues](#known-issues) and
 > [Troubleshooting](#troubleshooting).
 
+## Why I made it
+
+I use YouTube Music exclusively. It doesn't have a desktop app, and the web app
+is such a resource hog: it takes around 600-800 MB of RAM on day-to-day use. So
+I decided what someone with a lot of tokens to spare would do: make it myself.
+
+The app is built using [MyGO!!!!!](https://github.com/egoist/mygo), a framework
+for building native desktop apps with a low footprint using Go. It's relatively new, and
+I just wanted to try it out myself :p It's built using the Material 3 Expressive
+design language, because, duh?
+
+Basically what I'd expect from the official YouTube Music, since we're supposed
+to be using Material 3 Expressive at this point. Google hasn't done it (yet?),
+so I made it myself.
+
 ## Where the name comes from
 
 Meiro is built with the [MyGO](https://github.com/egoist/mygo) framework, and
@@ -31,45 +46,65 @@ half of the title.
 
 ## Features
 
-- **Stay light.** Meiro uses about 100 MB of RAM most of the time, and can go
-  as low as about 99 MB. It draws its own interface, so it carries no
-  Chromium.
-- **Play in the background.** Close the window and the music keeps playing.
-  The tray icon opens a small custom player with the track, a seek bar,
-  shuffle, previous, play or pause, next, and repeat, plus buttons to open
-  Meiro or quit.
-- **Browse.** View your Home feed and Explore, then open artist, album, and
-  playlist pages. Sign in to view your Library.
-- **Search.** Search from the bar at the top of every page, and narrow the
-  results by any of the categories YouTube Music offers for the query. Meiro
-  keeps your eight most recent searches.
-- **Play.** Play tracks from feeds, search results, and playlists. Seek, adjust
-  the volume, move to the previous or next track, shuffle, and repeat the
-  current track or queue.
-  After you select a track, the compact player stays available while you
-  browse. Open the full player to view the queue, lyrics, and related tracks.
-- **Follow the lyrics.** The Lyrics tab shows timed lyrics from YouTube Music,
-  or from [LRCLIB](https://lrclib.net) when YouTube Music has none. The line
-  being sung is lit and glides to the middle as the song plays; click a line to
-  jump to it. Switch to Static for the plain text.
-- **Auto-play.** Auto-play is on by default. It adds YouTube Music
-  recommendations after the current queue ends. Toggle it in the queue.
-- **Choose an appearance.** Follow the system theme, or choose light or dark.
-  Pick a Material 3 palette, adjust its hue, or use the current track's artwork
-  to set the app colours.
-- **Cache recent audio.** Meiro caches ten recently played tracks by default.
-  Choose a different limit and folder. Tracks are kept in the format YouTube
-  serves them, in a private cache folder. Set the limit to `0` to turn off the
-  cache.
-- **Use keyboard shortcuts.** Press Space to play or pause. Use Command on
-  macOS or Ctrl on Linux and Windows with Left or Right to change tracks, K or
-  F to open Search, and Comma to open Settings. Hold Command or Ctrl for a
-  moment to see its key over each button. Change any of them in Settings, under
-  Keyboard.
-- **Use system media controls.** Control playback from macOS Now Playing or a
-  Linux MPRIS client. Meiro publishes track details, cover art, and playback
-  state. It accepts play, pause, stop, previous, next, seek, volume, shuffle,
-  and repeat commands.
+### Find your music
+
+- **Home and Explore.** The same recommendations, new releases and charts you
+  see on YouTube Music, plus artist, album and playlist pages.
+- **Search.** Look up songs, albums, artists and playlists, and filter the
+  results. Your recent searches are saved.
+- **Song menus.** Play a song next, add it to a playlist, start a radio from
+  it, go to the artist, or copy a link to share.
+
+### Listen
+
+- **Everything you expect from a player.** Play, pause, skip, shuffle, repeat,
+  volume, and a queue you can see and change. A small player follows you while
+  you browse, and the full player shows the queue, lyrics and related songs.
+- **Lyrics that follow the song.** The line being sung is highlighted as the
+  song plays. You can switch to plain text.
+- **Music that keeps going.** When your queue ends, Meiro adds similar songs so
+  the music does not stop.
+- **Pick up where you left off.** Open Meiro again and your queue and song are
+  waiting for you.
+- **Keeps playing when you close the window.** A mini player in the tray lets
+  you control it without opening the app.
+- **Works with your computer's controls.** Use your media keys, the Now Playing
+  widget on Mac, or the media controls on Linux.
+- **Keyboard shortcuts.** Control music from the keyboard, and change the keys
+  to what suits you.
+
+### Your account and library
+
+- **Sign in with your Google account.** Get your own Home feed and Library.
+  Meiro never sees your password. You can still browse and play without
+  signing in.
+- **Manage your library.** Like songs, follow artists, save albums and
+  playlists, and make your own playlists.
+- **Organize playlists.** Sort a playlist by title, artist or length, or
+  search inside it.
+
+### Make it sound and look yours
+
+- **Equaliser.** Adjust the bass, treble and everything between, or pick a
+  preset. Turn on volume levelling so songs play at a similar loudness.
+- **Colours and themes.** Light, dark, or follow your computer. Pick a colour,
+  or let the app take its colours from the album art of the song playing.
+
+### Keep track of what you hear
+
+- **Last.fm.** Connect your Last.fm account and Meiro adds the songs you listen
+  to your profile. Pause it any time.
+- **Listening stats.** See how much you listened to, day by day. The history
+  stays on your computer and you can delete it whenever you like.
+
+### Light and simple
+
+- **Small and quick.** Meiro uses about 100 MB of memory, a fraction of what
+  YouTube Music in a browser tab takes.
+- **Saves recent songs.** Songs you played lately load faster the next time. You
+  choose how many to keep, or turn it off.
+- **Updates itself.** Meiro checks for new versions once a day. You can turn
+  this off.
 
 <p align="center">
   <a href="docs/screenshots/lyrics.png"><img src="docs/screenshots/lyrics.png" alt="Full player with synced lyrics, the sung line lit in the middle" width="720"></a>
