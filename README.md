@@ -146,6 +146,45 @@ full size.
 Download the latest build for your system from the
 [releases page](https://github.com/elianiva/meiro/releases).
 
+### Which file do I download?
+
+The release page lists many files. You need only one. Follow these steps.
+
+**Step 1. Find your system.**
+
+| You have | Download the file that ends in |
+| --- | --- |
+| A Mac (any Mac) | `.dmg` |
+| Windows | `-setup.exe` |
+| Ubuntu, Debian, Linux Mint, Pop!_OS | `.deb` |
+| Fedora | `.rpm` |
+| Arch, Manjaro, or any other Linux | `.AppImage` |
+
+On Arch there is no native package yet. The `.AppImage` is a single file that
+runs without an install: make it executable, then open it.
+
+**Step 2. Pick the right chip (Linux only).** Most computers are `amd64`.
+Choose `arm64` only if your computer has an ARM chip. To check, open a terminal and run `uname -m`.
+
+- It prints `x86_64`: choose the file with `amd64` in its name.
+- It prints `aarch64`: choose the file with `arm64` in its name.
+
+Macs and Windows need no choice. One `.dmg` works on Apple Silicon and on
+Intel, and there is one Windows file.
+
+**Step 3. Ignore the word "minimal".** Files with `-minimal` in the name are
+for advanced users. They need extra programs (`ffmpeg`, `yt-dlp`, and Node.js
+or Bun) that you must install yourself. If you pick one by mistake, playback
+will not work. Pick the file *without* `-minimal`.
+
+Do not download the files named `update-*.json` or ending in `.delta`. Meiro
+uses those to update itself.
+
+For example, on Ubuntu with a normal Intel or AMD computer, download
+`Meiro-<version>-linux-amd64.deb`.
+
+### Install steps
+
 **macOS**: open the disk image and drag Meiro to Applications. The app is not
 notarized by Apple yet, so the first time, right-click it and choose **Open**
 (or allow it under System Settings > Privacy & Security).
