@@ -83,7 +83,7 @@ func (a *app) setMiniExpanded(on bool) {
 		height = miniTallHeight
 		a.loadPanel()
 	}
-	a.desktop.resizeMini(miniWidth, height)
+	a.desktop.resizeMini(height)
 }
 
 // mini is the mini player's window while it is open. The system closes it
@@ -144,7 +144,7 @@ func (d *desktop) closeMini() {
 // the next time. A native popover that resizes in place draws its old content
 // stretched while it animates, so an open window is replaced by one of the
 // new size.
-func (d *desktop) resizeMini(width, height int) {
+func (d *desktop) resizeMini(height int) {
 	if d == nil {
 		return
 	}
