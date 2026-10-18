@@ -32,7 +32,7 @@ func benchApp(b *testing.B) *app {
 	a.thumbs = artwork.New(&http.Client{Transport: benchNoArtwork{}}, func() {})
 	b.Cleanup(a.thumbs.Close)
 	a.settings.AutoPlay = false
-	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
+	a.streams = audio.NewURLs(func(context.Context, string) (string, time.Duration, error) {
 		return "", 0, errors.New("bench")
 	})
 	b.Cleanup(a.player.Stop)

@@ -38,7 +38,7 @@ func TestIdleCPU(t *testing.T) {
 		t.Fatalf("making a tone: %v: %s", err, out)
 	}
 	a, _ := soakApp(t, dir)
-	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
+	a.streams = audio.NewURLs(func(context.Context, string) (string, time.Duration, error) {
 		return tone, time.Hour, nil
 	})
 	window := time.Duration(seconds) * time.Second

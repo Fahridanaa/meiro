@@ -193,7 +193,7 @@ func newTestApp(t testing.TB) *app {
 	t.Cleanup(a.thumbs.Close)
 	// Playing a track must not run the real yt-dlp: it takes seconds, and
 	// needs the network.
-	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
+	a.streams = audio.NewURLs(func(context.Context, string) (string, time.Duration, error) {
 		return "", 0, errors.New("no network in tests")
 	})
 	a.collectInfo = func(_ context.Context, version string) report.Info {

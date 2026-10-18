@@ -1,5 +1,4 @@
-// Package ytdlp asks yt-dlp for what the InnerTube API does not give: the
-// direct audio URL of a track, and the YouTube cookies of a browser.
+// Package ytdlp uses yt-dlp to resolve audio URLs and import browser cookies.
 package ytdlp
 
 import (
@@ -26,28 +25,26 @@ import (
 // ErrMissing reports that yt-dlp is neither inside the app nor on PATH.
 var ErrMissing = errors.New("playing needs ffmpeg and yt-dlp on PATH")
 
-// Resolve asks yt-dlp for a direct audio URL of a track and its length,
-// using the signed-in session when cookie is set.
-func Resolve(ctx context.Context, videoID, cookie string) (string, time.Duration, error) {
-	// An anonymous session does not need the JavaScript solver: the visionos
-	// client returns audio URLs that need no challenge. yt-dlp's default also
-	// asks the web client, which makes it run the solver under QuickJS for
-	// about seven seconds of CPU, so try visionos alone first and fall back to
-	// the full set if YouTube stops serving it.
-	if cookie == "" {
-		streamURL, total, err := resolve(ctx, videoID, cookie, true)
-		if err == nil {
-			return streamURL, total, nil
-		}
-		if ctx.Err() != nil {
-			return "", 0, err
-		}
-		log.Printf("playback: js-less resolve failed video_id=%s, retrying with the solver: %v", videoID, err)
+// Resolve asks yt-dlp for a direct audio URL of a track and its length. Stream
+// resolution is anonymous; account cookies stay with the YouTube API client
+// for account features and playback history.
+func Resolve(ctx context.Context, videoID string) (string, time.Duration, error) {
+	// The visionos client returns anonymous audio URLs without a challenge.
+	// yt-dlp's default also asks the web client, which makes it run the solver
+	// under QuickJS for about seven seconds of CPU, so try visionos alone first
+	// and fall back to the full set if YouTube stops serving it.
+	streamURL, total, err := resolve(ctx, videoID, true)
+	if err == nil {
+		return streamURL, total, nil
 	}
-	return resolve(ctx, videoID, cookie, false)
+	if ctx.Err() != nil {
+		return "", 0, err
+	}
+	log.Printf("playback: js-less resolve failed video_id=%s, retrying with the solver: %v", videoID, err)
+	return resolve(ctx, videoID, false)
 }
 
-func resolve(ctx context.Context, videoID, cookie string, jsless bool) (string, time.Duration, error) {
+func resolve(ctx context.Context, videoID string, jsless bool) (string, time.Duration, error) {
 	path, err := proc.Tool("yt-dlp")
 	if err != nil {
 		return "", 0, ErrMissing
@@ -64,20 +61,12 @@ func resolve(ctx context.Context, videoID, cookie string, jsless bool) (string, 
 	}
 	args := []string{"-f", "bestaudio", "-g", "--no-playlist", "--extractor-args", extractorArgs}
 	args = append(args, runtimeArgs...)
-	if cookie != "" {
-		cookieFile, err := cookieFile(cookie)
-		if err != nil {
-			return "", 0, fmt.Errorf("prepare yt-dlp authentication: %w", err)
-		}
-		defer func() { _ = os.Remove(cookieFile) }()
-		args = append(args, "--cookies", cookieFile)
-	}
 	args = append(args, youtube.WatchURL(videoID))
 	command := proc.Command(ctx, path, args...)
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	started := time.Now()
-	log.Printf("playback: running yt-dlp video_id=%s authenticated=%t js_runtime=%s", videoID, cookie != "", jsRuntime)
+	log.Printf("playback: running yt-dlp video_id=%s js_runtime=%s", videoID, jsRuntime)
 	output, err := command.Output()
 	if err != nil {
 		log.Printf("playback: yt-dlp failed video_id=%s elapsed=%s: %s", videoID, time.Since(started).Round(time.Millisecond), strings.TrimSpace(stderr.String()))
@@ -186,44 +175,6 @@ func lookupJSRuntime() (string, []string) {
 		return "quickjs", []string{"--js-runtimes", "quickjs:" + path}
 	}
 	return "none", nil
-}
-
-// cookieFile translates a YouTube Cookie header into the temporary Netscape
-// file yt-dlp accepts. The file is private to the user; the caller removes
-// it.
-func cookieFile(cookie string) (string, error) {
-	file, err := proc.CreateTemp("meiro-yt-dlp-cookies-*.txt")
-	if err != nil {
-		return "", err
-	}
-	name := file.Name()
-	fail := func(err error) (string, error) {
-		_ = file.Close()
-		_ = os.Remove(name)
-		return "", err
-	}
-	if _, err := file.WriteString("# Netscape HTTP Cookie File\n"); err != nil {
-		return fail(err)
-	}
-	count := 0
-	for part := range strings.SplitSeq(cookie, ";") {
-		key, value, ok := strings.Cut(strings.TrimSpace(part), "=")
-		if !ok || key == "" || strings.ContainsAny(key+value, "\t\r\n") {
-			continue
-		}
-		if _, err := fmt.Fprintf(file, ".youtube.com\tTRUE\t/\tTRUE\t0\t%s\t%s\n", key, strings.TrimSpace(value)); err != nil {
-			return fail(err)
-		}
-		count++
-	}
-	if count == 0 {
-		return fail(errors.New("cookie header has no valid cookies"))
-	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(name)
-		return "", err
-	}
-	return name, nil
 }
 
 // durationFromURL reads the track length YouTube puts in its media URLs.

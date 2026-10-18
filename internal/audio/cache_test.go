@@ -86,7 +86,7 @@ func TestCacheFromDownloadToRestart(t *testing.T) {
 func TestURLsShareOneResolve(t *testing.T) {
 	var calls atomic.Int32
 	release := make(chan struct{})
-	urls := NewURLs(func(_ context.Context, videoID, _ string) (string, time.Duration, error) {
+	urls := NewURLs(func(_ context.Context, videoID string) (string, time.Duration, error) {
 		calls.Add(1)
 		<-release
 		if videoID == "bad" {
@@ -97,7 +97,7 @@ func TestURLsShareOneResolve(t *testing.T) {
 	done := make(chan string, 2)
 	for range 2 {
 		go func() {
-			url, _, _ := urls.Get(context.Background(), "a", "")
+			url, _, _ := urls.Get(context.Background(), "a")
 			done <- url
 		}()
 	}
@@ -109,8 +109,8 @@ func TestURLsShareOneResolve(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Errorf("two requests resolved %d times", calls.Load())
 	}
-	_, _, _ = urls.Get(context.Background(), "bad", "")
-	_, _, _ = urls.Get(context.Background(), "bad", "")
+	_, _, _ = urls.Get(context.Background(), "bad")
+	_, _, _ = urls.Get(context.Background(), "bad")
 	if calls.Load() != 3 {
 		t.Errorf("a failed resolve was remembered: %d resolves", calls.Load())
 	}

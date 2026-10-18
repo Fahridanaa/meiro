@@ -73,14 +73,6 @@ func newAccountState(newClient func(*youtube.CookieAuth) *youtube.Client, source
 	}
 }
 
-// cookie is the cookie of the session in use, or "" while signed out.
-func (s *accountState) cookie() string {
-	if s.session != nil {
-		return s.session.cookie
-	}
-	return ""
-}
-
 // credentials is the saved sign-in, and the rules for writing it. Writes run
 // off the main thread, and a write already on its way must never undo a
 // dismissed sign-in or a sign-out, so every write checks, under mu, that the

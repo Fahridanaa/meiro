@@ -278,7 +278,6 @@ func (a *app) afterEnter(item youtube.MusicItem, changed bool) {
 	a.ensureUpNext()
 	a.loadPanel()
 	if changed {
-		a.reportPlayback(item)
 		if a.settings.NotifyTrack {
 			a.desktop.notify(item)
 		}
@@ -352,12 +351,12 @@ func playbackVolume(volume, loudness float64, normalize bool) float64 {
 // streamAudio finds a track's audio off the main thread, in the cache or
 // with yt-dlp, and plays it.
 func (a *app) streamAudio(item youtube.MusicItem, startAt time.Duration, changed bool) {
-	cookie, cache := a.account.cookie(), a.currentAudioCache()
-	log.Printf("playback: resolving video_id=%s signed_in=%t", item.VideoID, cookie != "")
+	cache := a.currentAudioCache()
+	log.Printf("playback: resolving video_id=%s", item.VideoID)
 	a.fetchLoudness(item, &a.loudnessLoad)
 	startTask(a, &a.stream, audio.ResolveTimeout, func(ctx context.Context) (resolvedAudio, error) {
 		a.player.Stop()
-		found, err := findAudio(ctx, a.streams, item, cookie, cache)
+		found, err := findAudio(ctx, a.streams, item, cache)
 		if err != nil || ctx.Err() != nil {
 			return found, err
 		}
@@ -383,6 +382,7 @@ func (a *app) streamAudio(item youtube.MusicItem, startAt time.Duration, changed
 		log.Printf("playback: audio started video_id=%s from_cache=%t duration=%s", item.VideoID, found.fromCache, found.total)
 		if changed {
 			a.recordHistory(item)
+			a.reportPlayback(item)
 		}
 		a.skipped = 0
 		if !found.fromCache {
@@ -436,11 +436,11 @@ func (a *app) syncPreload() {
 		a.total-a.player.Position() > preloadLead {
 		return
 	}
-	cookie, cache := a.account.cookie(), a.currentAudioCache()
+	cache := a.currentAudioCache()
 	a.preloadFor = next.VideoID
 	a.fetchLoudness(next, &a.preloadLoudnessLoad)
 	startTask(a, &a.preload, audio.ResolveTimeout, func(ctx context.Context) (preloadedAudio, error) {
-		found, err := findAudio(ctx, a.streams, next, cookie, cache)
+		found, err := findAudio(ctx, a.streams, next, cache)
 		if err == nil {
 			err = ctx.Err()
 		}
@@ -486,6 +486,7 @@ func (a *app) followed(tag string) {
 	a.warmNext()
 	if changed {
 		a.recordHistory(item)
+		a.reportPlayback(item)
 	}
 	a.afterEnter(item, changed)
 	a.syncSystemMedia()
@@ -529,7 +530,7 @@ func (a *app) recoverStream(failure string) bool {
 		a.recoveredFrom = at
 	}
 	paused, bySleep := a.player.Paused(), a.suspendedWhilePlaying
-	cookie, cache := a.account.cookie(), a.currentAudioCache()
+	cache := a.currentAudioCache()
 	log.Printf("playback: stream broke off video_id=%s at=%s attempt=%d/%d: %s", item.VideoID, at.Round(time.Second), attempt, maxRecoveries, failure)
 	a.fetchLoudness(item, &a.loudnessLoad)
 	startTask(a, &a.stream, audio.ResolveTimeout+time.Duration(attempt)*recoveryBackoff, func(ctx context.Context) (resolvedAudio, error) {
@@ -537,7 +538,7 @@ func (a *app) recoverStream(failure string) bool {
 			return resolvedAudio{}, err
 		}
 		a.streams.Forget(item.VideoID)
-		found, err := findAudio(ctx, a.streams, item, cookie, cache)
+		found, err := findAudio(ctx, a.streams, item, cache)
 		if err != nil || ctx.Err() != nil {
 			return found, err
 		}
@@ -565,7 +566,7 @@ func (a *app) recoverStream(failure string) bool {
 }
 
 // findAudio is where a track's audio is: in the cache, or from yt-dlp.
-func findAudio(ctx context.Context, streams *audio.URLs, item youtube.MusicItem, cookie string, cache *audio.Cache) (resolvedAudio, error) {
+func findAudio(ctx context.Context, streams *audio.URLs, item youtube.MusicItem, cache *audio.Cache) (resolvedAudio, error) {
 	found := resolvedAudio{total: parseDuration(item.Duration)}
 	if path, ok := cache.Get(item.VideoID); ok {
 		log.Printf("playback: audio cache hit video_id=%s", item.VideoID)
@@ -579,7 +580,7 @@ func findAudio(ctx context.Context, streams *audio.URLs, item youtube.MusicItem,
 		}
 		return found, nil
 	}
-	url, total, err := streams.Get(ctx, item.VideoID, cookie)
+	url, total, err := streams.Get(ctx, item.VideoID)
 	found.url = url
 	if total > 0 {
 		found.total = total
@@ -599,11 +600,11 @@ func (a *app) warmNext() {
 	if next.VideoID == "" || next.VideoID == a.current.VideoID {
 		return
 	}
-	cache, cookie := a.currentAudioCache(), a.account.cookie()
+	cache := a.currentAudioCache()
 	a.run(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), audio.ResolveTimeout)
 		defer cancel()
-		url, _, err := a.streams.Get(ctx, next.VideoID, cookie)
+		url, _, err := a.streams.Get(ctx, next.VideoID)
 		if err != nil {
 			log.Printf("playback: could not resolve next video_id=%s: %v", next.VideoID, err)
 			return

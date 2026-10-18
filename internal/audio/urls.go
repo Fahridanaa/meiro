@@ -16,9 +16,8 @@ const (
 	ResolveTimeout = 90 * time.Second
 )
 
-// Resolver finds a direct audio URL and the length of a track, signed in with
-// cookie when it is set.
-type Resolver func(ctx context.Context, videoID, cookie string) (string, time.Duration, error)
+// Resolver finds a direct audio URL and the length of a track.
+type Resolver func(ctx context.Context, videoID string) (string, time.Duration, error)
 
 // URLs remembers resolved audio URLs, so a track resolved ahead of time plays
 // without waiting on yt-dlp. A URL is a few hundred bytes: resolving ahead
@@ -33,12 +32,11 @@ type URLs struct {
 }
 
 type urlEntry struct {
-	cookie string
-	at     time.Time
-	done   chan struct{}
-	url    string
-	total  time.Duration
-	err    error
+	at    time.Time
+	done  chan struct{}
+	url   string
+	total time.Duration
+	err   error
 }
 
 // NewURLs returns an empty cache that resolves with resolve.
@@ -47,17 +45,16 @@ func NewURLs(resolve Resolver) *URLs {
 }
 
 // Get returns the audio URL and length of a track, resolving it unless a
-// fresh result or a resolve in flight for the same session exists. The
-// resolve goes on when ctx ends, so a later Get can still use it; a failed
-// one is not remembered.
-func (c *URLs) Get(ctx context.Context, videoID, cookie string) (string, time.Duration, error) {
+// fresh result or a resolve in flight exists. The resolve goes on when ctx
+// ends, so a later Get can still use it; a failed one is not remembered.
+func (c *URLs) Get(ctx context.Context, videoID string) (string, time.Duration, error) {
 	if err := ctx.Err(); err != nil {
 		return "", 0, err
 	}
 	c.mu.Lock()
 	e, ok := c.entries[videoID]
-	if !ok || e.cookie != cookie || e.stale() {
-		e = &urlEntry{cookie: cookie, at: time.Now(), done: make(chan struct{})}
+	if !ok || e.stale() {
+		e = &urlEntry{at: time.Now(), done: make(chan struct{})}
 		c.entries[videoID] = e
 		c.trimLocked()
 		// The resolve outlives this request, so a later one can share it;
@@ -85,7 +82,7 @@ func (c *URLs) Forget(videoID string) {
 func (c *URLs) run(ctx context.Context, videoID string, e *urlEntry) {
 	ctx, cancel := context.WithTimeout(ctx, ResolveTimeout)
 	defer cancel()
-	e.url, e.total, e.err = c.resolve(ctx, videoID, e.cookie)
+	e.url, e.total, e.err = c.resolve(ctx, videoID)
 	if e.err != nil {
 		c.mu.Lock()
 		if c.entries[videoID] == e {

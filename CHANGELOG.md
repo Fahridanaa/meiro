@@ -13,6 +13,8 @@ and this project adheres to
 - **YouTube brand channels can be switched from the account menu.** Meiro now
   reads the brand IDs YouTube supplies for channel switching, and marks only
   the active channel as selected.
+- **Tracks now play while signed in.** Stream URLs resolve without account
+  cookies, and YouTube playback history is reported after audio starts.
 
 ## [0.3.3] - 2026-10-18
 

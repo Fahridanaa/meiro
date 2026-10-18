@@ -100,7 +100,7 @@ func soakApp(t testing.TB, dir string) (*app, *ui.Tester) {
 	a.thumbs = artwork.New(&http.Client{Transport: newSoakArtwork()}, a.refresh)
 	t.Cleanup(a.thumbs.Close)
 	a.settings.AutoPlay = false
-	a.streams = audio.NewURLs(func(context.Context, string, string) (string, time.Duration, error) {
+	a.streams = audio.NewURLs(func(context.Context, string) (string, time.Duration, error) {
 		return "", 0, errors.New("soak")
 	})
 	a.historyPath = filepath.Join(dir, "history.json")

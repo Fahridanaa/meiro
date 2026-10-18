@@ -36,7 +36,7 @@ type resolved struct {
 	url func(videoID string, n int) (string, error)
 }
 
-func (r *resolved) resolve(_ context.Context, videoID, _ string) (string, time.Duration, error) {
+func (r *resolved) resolve(_ context.Context, videoID string) (string, time.Duration, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.ids = append(r.ids, videoID)
@@ -454,6 +454,40 @@ type playbackRoundTrip func(*http.Request) (*http.Response, error)
 
 func (roundTrip playbackRoundTrip) RoundTrip(request *http.Request) (*http.Response, error) {
 	return roundTrip(request)
+}
+
+func TestSignedInPlaybackReportsHistoryOnlyAfterAudioStarts(t *testing.T) {
+	a, r := tonesApp(t, 2)
+	auth, err := youtube.NewCookieAuth("SAPISID=test", youtube.CookieOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reports atomic.Int32
+	a.account.session = &session{client: youtube.NewClient(youtube.Options{
+		CookieAuth: auth,
+		HTTPClient: &http.Client{Transport: playbackRoundTrip(func(request *http.Request) (*http.Response, error) {
+			body := `{"playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback?docid=song"}}}`
+			if request.Method == http.MethodGet {
+				reports.Add(1)
+				body = ""
+			}
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+		})},
+	})}
+
+	r.err["unavailable"] = errors.New("Requested format is not available")
+	a.play(tracks("unavailable")[0], nil)
+	if reports.Load() != 0 {
+		t.Fatalf("reported failed playback %d times", reports.Load())
+	}
+
+	a.play(tracks("song")[0], nil)
+	pollUntil(t, a, "signed-in playback report", func() bool {
+		return reports.Load() == 1 && a.player.Playing()
+	})
+	if len(a.history) != 1 || a.history[0].VideoID != "song" {
+		t.Errorf("local history = %+v, want the track that started", a.history)
+	}
 }
 
 func TestAutoPlayFetchesAndQueuesRecommendations(t *testing.T) {
