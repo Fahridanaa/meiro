@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-10-18
+
 ### Changed
 
 - **Playlist sort has a separate direction button.** The sort menu now only
