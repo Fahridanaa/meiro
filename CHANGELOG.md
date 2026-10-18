@@ -11,8 +11,8 @@ and this project adheres to
 ### Added
 
 - **Discord Rich Presence.** When enabled in Settings, Discord shows the
-  playing track, artist, cover and elapsed time. The status clears when
-  playback pauses or stops.
+  playing track, artist, cover and elapsed time, without repeating the title
+  in the cover's hover text. The status clears when playback pauses or stops.
 
 ### Fixed
 

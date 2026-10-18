@@ -245,7 +245,6 @@ type timestamps struct {
 
 type assets struct {
 	LargeImage string `json:"large_image,omitempty"`
-	LargeText  string `json:"large_text,omitempty"`
 }
 
 func makeActivity(state State, startedAt int64) *activity {
@@ -256,7 +255,7 @@ func makeActivity(state State, startedAt int64) *activity {
 		Timestamps: &timestamps{Start: startedAt},
 	}
 	if artworkURL := validArtworkURL(state.ArtworkURL); artworkURL != "" {
-		a.Assets = &assets{LargeImage: artworkURL, LargeText: truncate(state.Title, 128)}
+		a.Assets = &assets{LargeImage: artworkURL}
 	}
 	return a
 }

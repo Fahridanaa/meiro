@@ -84,6 +84,9 @@ func TestSessionSendsListeningActivityAndClearsOnPause(t *testing.T) {
 	if got.Assets == nil || got.Assets.LargeImage != "https://i.ytimg.com/cover.jpg" {
 		t.Errorf("artwork = %+v", got.Assets)
 	}
+	if strings.Contains(string(request.Activity), `"large_text"`) {
+		t.Errorf("activity repeats the track title in artwork hover text: %s", request.Activity)
+	}
 	if got.Timestamps == nil || time.Until(time.Unix(got.Timestamps.Start, 0)) > -41*time.Second {
 		t.Errorf("elapsed timestamp = %+v, want about 42 seconds ago", got.Timestamps)
 	}

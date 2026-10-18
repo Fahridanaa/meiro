@@ -26,7 +26,7 @@ Preconditions:
 
 - **Settings.** Enable `Discord Rich Presence`. The switch persists in `settings.json`; users do not enter an application ID.
 - **Activity and keepalive.** `go test ./internal/discordrpc` runs the RPC handshake, verifies the `SET_ACTIVITY` payload, confirms pause sends a null activity, and checks that an idle session answers Discord's PING with PONG.
-- **Native Discord.** Set `discordPresenceApplicationID` in `main.go` to Meiro's public Discord application ID, run Meiro and Discord on the same desktop, and play a track. This integration cannot be proven against Discord until Meiro's ID is provided.
+- **Native Discord.** Meiro's public application ID is bundled in `main.go`. Run Meiro and Discord on the same desktop, enable the setting, and play a public track. Confirm Discord shows the track and artist, then pause playback and confirm the activity clears.
 
 ## Gotchas
 

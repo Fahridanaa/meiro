@@ -41,8 +41,8 @@ import (
 	"github.com/elianiva/meiro/systemmedia"
 )
 
-// Set this to Meiro's public Discord application ID before releasing.
-const discordPresenceApplicationID = ""
+// Discord Rich Presence uses Meiro's public Discord application ID.
+const discordPresenceApplicationID = "1561435721456296087"
 
 func main() {
 	// The heap is mostly artwork, which lives as long as the user browses and
