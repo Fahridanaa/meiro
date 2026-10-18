@@ -74,6 +74,9 @@ half of the title.
   you control it without opening the app.
 - **Works with your computer's controls.** Use your media keys, the Now Playing
   widget on Mac, or the media controls on Linux.
+- **Share what you hear on Discord.** With Discord running, enable Discord
+  Rich Presence in Settings → Desktop to show the current track, artist, cover
+  and elapsed time. Meiro clears the activity when playback pauses or stops.
 - **Keyboard shortcuts.** Control music from the keyboard, and change the keys
   to what suits you.
 
