@@ -43,8 +43,9 @@ bazel test --config=race //...
 
 You can run a focused test while working, for example
 `bazel test //youtube:youtube_test`, then run the full set before you submit.
-`bazel run //:lint` runs the linters, `bazel run //:format` formats the code,
-and `bazel build --config=linux-arm64 //...` type-checks another release
+Run `git config core.hooksPath .githooks` once to make `git push` run the
+format check and the linters first. `bazel run //:lint` runs the linters,
+`bazel run //:format` formats the code, and `bazel build --config=linux-arm64 //...` type-checks another release
 target. The CI workflow runs the same commands, and also builds every release
 target and validates the scripts and the workflows.
 
