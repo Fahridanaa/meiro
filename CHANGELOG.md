@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **YouTube brand channels can be switched from the account menu.** Meiro now
+  reads the brand IDs YouTube supplies for channel switching, and marks only
+  the active channel as selected.
+
 ## [0.3.3] - 2026-10-18
 
 ### Changed

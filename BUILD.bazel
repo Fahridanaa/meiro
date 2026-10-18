@@ -209,6 +209,7 @@ go_binary(
 go_test(
     name = "meiro_test",
     srcs = [
+        "accountview_test.go",
         "bench_test.go",
         "benchfixture_test.go",
         "cpu_other_test.go",
@@ -245,7 +246,9 @@ go_test(
         "//internal/lrclib",
         "//internal/playstate",
         "//internal/proc",
+        "//internal/report",
         "//internal/settings",
+        "//m3",
         "//player",
         "//youtube",
         "@com_github_egoist_mygo//:mygo",

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/m3"
+	"github.com/elianiva/meiro/youtube"
 )
 
 // musicURL is where the user signs in, and the page whose requests carry the
@@ -138,17 +140,24 @@ func (a *app) channelItems(c *ui.Context, current *session) {
 	if len(current.channels) < 2 {
 		return
 	}
+	hasSelectedChannel := false
+	for _, channel := range current.channels {
+		if channel.Selected {
+			hasSelectedChannel = true
+			break
+		}
+	}
 	sc := m3.Of(c).Scheme
 	m3.Text(c, m3.LabelMedium, "Channel").Padding(12, 12, 4).TextColor(sc.OnSurfaceVariant)
-	for _, channel := range current.channels {
+	for i, channel := range current.channels {
 		name := channel.Name
 		if name == "" {
 			name = channel.Handle
 		}
-		row := ui.ButtonBase(c.Key("channel-" + channel.ChannelID))
+		row := ui.ButtonBase(c.Key("channel-" + channel.ChannelID + "-" + strconv.Itoa(i)))
 		row.Height(48).PaddingX(12).Gap(12).AlignItems(ui.Center).Radius(m3.Medium).Cursor(ui.CursorPointer).Label(name).
 			Background(m3.StateFill(ui.Transparent, sc.OnSurface, row.Hovered(), row.Pressed(), row.FocusVisible()))
-		selected := channel.ChannelID == current.channel
+		selected := accountChannelSelected(channel, hasSelectedChannel, current.channel)
 		row.Children(func() {
 			if selected {
 				ui.Icon(c, m3.IconCheck).FontSize(22).TextColor(sc.Primary)
@@ -163,6 +172,16 @@ func (a *app) channelItems(c *ui.Context, current *session) {
 		}
 	}
 	ui.Divider(c)
+}
+
+// accountChannelSelected uses YouTube's selected bit when it gives one. An
+// account can omit channel IDs, so an empty ID must never make every row look
+// selected just because the session uses its default channel.
+func accountChannelSelected(channel youtube.AccountChannel, hasSelectedChannel bool, current string) bool {
+	if hasSelectedChannel {
+		return channel.Selected
+	}
+	return current != "" && channel.ChannelID == current
 }
 
 // advancedIcon points down while the advanced sign-in options are folded away

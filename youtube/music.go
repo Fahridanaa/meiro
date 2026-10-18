@@ -1173,6 +1173,9 @@ func parseAccountChannel(renderer *jsonObject) AccountChannel {
 	if channel.ChannelID == "" {
 		channel.ChannelID, _ = renderer.get("channelId").(string)
 	}
+	if channel.ChannelID == "" {
+		channel.ChannelID = accountChannelPageID(renderer.get("serviceEndpoint"))
+	}
 	if channel.Handle == "" {
 		channel.Handle, _ = renderer.get("handle").(string)
 	}
@@ -1186,6 +1189,28 @@ func parseAccountChannel(renderer *jsonObject) AccountChannel {
 		channel.Thumbnail = rendererThumbnail(renderer.get("account_photo"))
 	}
 	return channel
+}
+
+// accountChannelPageID reads the brand channel ID from the identity token the
+// account switcher returns. The primary account has no pageIdToken and uses
+// the empty channel ID.
+func accountChannelPageID(serviceEndpoint any) string {
+	identity, ok := nestedObject(serviceEndpoint, "selectActiveIdentityEndpoint")
+	if !ok {
+		return ""
+	}
+	tokens, ok := identity.get("supportedTokens").([]any)
+	if !ok {
+		return ""
+	}
+	for _, token := range tokens {
+		if token, ok := token.(*jsonObject); ok {
+			if pageID := nestedString(token.get("pageIdToken"), "pageId"); pageID != "" {
+				return pageID
+			}
+		}
+	}
+	return ""
 }
 
 func hasAccountChannelFields(value *jsonObject) bool {

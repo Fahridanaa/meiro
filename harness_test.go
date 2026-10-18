@@ -96,6 +96,8 @@ func (fakeMusic) RoundTrip(request *http.Request) (*http.Response, error) {
 		}
 	case strings.HasSuffix(request.URL.Path, "/next") && fakeLikes() != "" && strings.Contains(asked, "vid-3"):
 		reply = nextResponse(fakeLikes())
+	case strings.HasSuffix(request.URL.Path, "/account/account_menu"):
+		reply = signedInAccountMenu
 	case strings.HasSuffix(request.URL.Path, "/account/accounts_list"):
 		reply = accountsResponse
 	case strings.HasSuffix(request.URL.Path, "/music/get_search_suggestions"):
@@ -519,8 +521,10 @@ const recapResponse = `{"contents":{"musicCarouselShelfRenderer":{
 }}}`
 
 const accountsResponse = `{"accountSectionListRenderer":{"contents":[{"accountItemSectionRenderer":{"contents":[
-	{"accountItemRenderer":{"accountName":{"simpleText":"Main channel"},"channelId":"UC-main","isSelected":true,"hasChannel":true}},
-	{"accountItemRenderer":{"accountName":{"simpleText":"Brand channel"},"channelId":"UC-brand","hasChannel":true}}
+	{"accountItemRenderer":{"accountName":{"simpleText":"Main channel"},"isSelected":true,"hasChannel":true}},
+	{"accountItemRenderer":{"accountName":{"simpleText":"Brand channel"},"hasChannel":true,"serviceEndpoint":{"selectActiveIdentityEndpoint":{"supportedTokens":[{"pageIdToken":{"pageId":"UC-brand"}}]}}}},
+	{"accountItemRenderer":{"accountName":{"simpleText":"Music channel"},"hasChannel":true,"serviceEndpoint":{"selectActiveIdentityEndpoint":{"supportedTokens":[{"pageIdToken":{"pageId":"UC-music"}}]}}}},
+	{"accountItemRenderer":{"accountName":{"simpleText":"Studio channel"},"hasChannel":true,"serviceEndpoint":{"selectActiveIdentityEndpoint":{"supportedTokens":[{"pageIdToken":{"pageId":"UC-studio"}}]}}}}
 ]}}]}}`
 
 // refusingMusic answers the account menu the way YouTube answers for a session
