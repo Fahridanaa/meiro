@@ -26,6 +26,9 @@ const (
 	volumeInterval  = 50 * time.Millisecond
 )
 
+// valid reports whether l is one of the supported loop modes.
+func (l Loop) valid() bool { return l == LoopNone || l == LoopTrack || l == LoopPlaylist }
+
 type linuxSession struct {
 	conn        *dbus.Conn
 	busName     string

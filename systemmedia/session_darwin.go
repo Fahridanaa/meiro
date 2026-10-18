@@ -129,6 +129,8 @@ func (s *macSession) Update(state State) error {
 				playbackState = 1
 			case Paused:
 				playbackState = 2
+			case Stopped:
+				playbackState = 3
 			}
 			s.center.Send(objc.Sel("setPlaybackState:"), playbackState)
 		}

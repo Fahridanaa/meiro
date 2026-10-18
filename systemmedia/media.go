@@ -22,9 +22,6 @@ const (
 	LoopPlaylist Loop = "Playlist" // go back to the start after the last
 )
 
-// valid reports whether l is one of the loops above.
-func (l Loop) valid() bool { return l == LoopNone || l == LoopTrack || l == LoopPlaylist }
-
 // State describes the track and controls currently available to the user.
 type State struct {
 	VideoID    string
