@@ -163,6 +163,7 @@ go_library(
         "stats.go",
         "subscription.go",
         "task.go",
+        "toolhelp.go",
         "toolscard.go",
         "updatesettings.go",
     ],

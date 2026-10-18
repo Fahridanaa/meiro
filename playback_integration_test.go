@@ -254,6 +254,7 @@ func TestAnUnplayableTrackShowsAReadableReason(t *testing.T) {
 		{"yt-dlp could not resolve the audio: Private video. Sign in if you've been granted access", "This track is private."},
 		{"yt-dlp could not resolve the audio: This video has been removed by the uploader", "This track is no longer available."},
 		{"yt-dlp could not resolve the audio: Unable to download webpage: Temporary failure in name resolution", "Could not reach YouTube. Check your connection."},
+		{"yt-dlp could not resolve the audio: [youtube] M2cckDmNLMI: Requested format is not available. Use --list-formats for a list of available formats", "YouTube did not offer audio for this track. Try again later, or update Meiro."},
 		{"context deadline exceeded", "Could not reach YouTube. Check your connection."},
 		{"yt-dlp could not resolve the audio: something new", "This track could not be played: yt-dlp could not resolve the audio: something new"},
 	} {
@@ -1120,5 +1121,44 @@ func TestPlayerBarButtonsKeepTheirOwnEdges(t *testing.T) {
 			t.Errorf("a press 2 px inside the %s edge of Up next did not open Up next (open=%v, queueOnly=%v)",
 				side, a.nowPlaying.open, a.nowPlaying.queueOnly)
 		}
+	}
+}
+
+// A track YouTube gives no audio for says why in the skip toast, and Learn
+// more explains an outdated yt-dlp for the build the listener runs.
+func TestFormatUnavailableOffersHelpForTheBuild(t *testing.T) {
+	for _, tc := range []struct {
+		full bool
+		want string
+	}{
+		{true, "You use the full build"},
+		{false, "You use the minimal build"},
+	} {
+		a, r := playbackApp(t)
+		a.bundled = func(string) bool { return tc.full }
+		r.err["b"] = errors.New("yt-dlp could not resolve the audio: Requested format is not available")
+		tt := ui.NewTester(a.view, 1000, 700)
+		q := tracks("a", "b", "c")
+		a.play(q[1], q)
+		tt.Frame()
+		if err := tt.Click("Learn more"); err != nil {
+			t.Fatalf("full=%v: %v", tc.full, err)
+		}
+		tt.Frame()
+		if !tt.HasText(tc.want) {
+			t.Errorf("full=%v: dialog lacks %q: %q", tc.full, tc.want, tt.Texts())
+		}
+	}
+}
+
+func TestOtherSkipsHaveNoLearnMore(t *testing.T) {
+	a, r := playbackApp(t)
+	r.err["b"] = errors.New("Video unavailable")
+	tt := ui.NewTester(a.view, 1000, 700)
+	q := tracks("a", "b", "c")
+	a.play(q[1], q)
+	tt.Frame()
+	if tt.HasText("Learn more") {
+		t.Errorf("unrelated skip offers Learn more: %q", tt.Texts())
 	}
 }

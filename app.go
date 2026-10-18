@@ -16,6 +16,7 @@ import (
 	"github.com/elianiva/meiro/internal/history"
 	"github.com/elianiva/meiro/internal/lrclib"
 	"github.com/elianiva/meiro/internal/lru"
+	"github.com/elianiva/meiro/internal/proc"
 	"github.com/elianiva/meiro/internal/report"
 	"github.com/elianiva/meiro/internal/settings"
 	"github.com/elianiva/meiro/internal/ytdlp"
@@ -47,6 +48,9 @@ type app struct {
 	sleep func(ctx context.Context, delay time.Duration) error
 	// openURL opens a link in the default browser. Tests record it.
 	openURL func(url string) error
+	// bundled reports whether a helper program is the one inside the app.
+	// Tests replace it.
+	bundled func(name string) bool
 
 	// What the user chose, and the writer that keeps it.
 	settings settings.Settings
@@ -65,6 +69,9 @@ type app struct {
 	logsDir string
 	// notice is a message for the next frame to show as a toast.
 	notice string
+	// noticeHelp adds a Learn more button to the notice that opens the
+	// explanation of an outdated yt-dlp.
+	noticeHelp bool
 
 	theme themeState
 
@@ -100,6 +107,7 @@ type app struct {
 
 	// Dialogs.
 	crash         *crashState
+	toolHelp      *toolHelpState
 	newPlaylist   *newPlaylistState
 	addToPlaylist *addToPlaylistState
 	// knownPlaylists are the playlists the library last showed, offered at
@@ -169,6 +177,7 @@ func newApp() *app {
 		player:     player.New(playerOptions()...),
 		settings:   settings.Defaults(),
 		openURL:    mygo.Shell.OpenExternal,
+		bundled:    proc.Bundled,
 		page:       &pageData{},
 		list:       &ui.ListState{},
 		pages:      lru.New[string, *pageData](pageCacheLimit),

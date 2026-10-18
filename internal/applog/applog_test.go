@@ -2,6 +2,7 @@ package applog
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,5 +100,25 @@ func TestWriteRedactsBeforeItReachesTheFile(t *testing.T) {
 	fmt.Fprintln(f, "Cookie: SAPISID=hunter2")
 	if got := read(t, f.Path()); strings.Contains(got, "hunter2") {
 		t.Errorf("the log has the secret: %q", got)
+	}
+}
+
+type brokenWriter struct{}
+
+func (brokenWriter) Write([]byte) (int, error) { return 0, os.ErrClosed }
+
+func TestInstallKeepsLoggingWhenStandardErrorIsBroken(t *testing.T) {
+	log.SetOutput(brokenWriter{})
+	defer log.SetOutput(os.Stderr)
+	dir := t.TempDir()
+	f, err := open(dir, MaxSize, Keep, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	Install(f)
+	log.Print("yt-dlp failed")
+	if got := read(t, f.Path()); !strings.Contains(got, "yt-dlp failed") {
+		t.Fatalf("log file = %q, want the line", got)
 	}
 }

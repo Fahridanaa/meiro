@@ -31,8 +31,12 @@ func (a *app) view(c *ui.Context) {
 	a.syncLocation()
 	a.followArtwork()
 	if a.notice != "" {
-		c.Toast(a.notice)
-		a.notice = ""
+		if a.noticeHelp {
+			c.AddToast(ui.Toast{Title: a.notice, Action: "Learn more", OnAction: a.openToolHelp})
+		} else {
+			c.Toast(a.notice)
+		}
+		a.notice, a.noticeHelp = "", false
 	}
 	a.syncSignInDialog()
 
@@ -46,6 +50,7 @@ func (a *app) view(c *ui.Context) {
 	a.signInDialog(c)
 	a.newPlaylistDialog(c)
 	a.addToPlaylistDialog(c)
+	a.toolHelpDialog(c)
 	a.crashDialog(c)
 	m3.Snackbars(c, 0)
 	a.shortcuts(c)

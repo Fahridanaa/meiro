@@ -137,7 +137,22 @@ func (f *File) Close() error {
 // Install sends the standard logger, and so slog's default handler, which
 // writes through it, to f as well as to the writer they used until now.
 func Install(f *File) {
-	log.SetOutput(io.MultiWriter(log.Writer(), f))
+	log.SetOutput(tee{f: f, other: log.Writer()})
+}
+
+// tee writes to the file first, and then to the writer the logger used
+// before. That writer can fail for good: an app opened from the desktop has no
+// standard error, and io.MultiWriter stops at the first writer that fails, so
+// the file would never see a line. Its failure is ignored for the same reason.
+type tee struct {
+	f     *File
+	other io.Writer
+}
+
+func (t tee) Write(p []byte) (int, error) {
+	_, _ = t.f.Write(p)
+	_, _ = t.other.Write(p)
+	return len(p), nil
 }
 
 // secretPatterns match what must never reach a log: cookie and authorization

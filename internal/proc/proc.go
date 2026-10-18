@@ -34,16 +34,35 @@ const tempRootPrefix = "meiro-tmp-"
 // is one, so a download runs as it is, and otherwise the one on PATH, which
 // is what a run from source uses.
 func Tool(name string) (string, error) {
+	if bundled, ok := bundledPath(name); ok {
+		return bundled, nil
+	}
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	if resources, err := mygo.App.Path(mygo.PathResources); err == nil {
-		bundled := filepath.Join(resources, "bin", name)
-		if info, err := os.Stat(bundled); err == nil && !info.IsDir() {
-			return bundled, nil
-		}
-	}
 	return exec.LookPath(name)
+}
+
+// Bundled reports whether the copy of a helper program that Tool finds is the
+// one inside the app, as in the full build, and not one from PATH.
+func Bundled(name string) bool {
+	_, ok := bundledPath(name)
+	return ok
+}
+
+func bundledPath(name string) (string, bool) {
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	resources, err := mygo.App.Path(mygo.PathResources)
+	if err != nil {
+		return "", false
+	}
+	path := filepath.Join(resources, "bin", name)
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		return path, true
+	}
+	return "", false
 }
 
 // Command builds an exec.Cmd whose cancellation kills the whole process tree

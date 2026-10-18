@@ -8,6 +8,18 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **A track that YouTube gives no audio for now says so in plain words.**
+  Before, the player bar and the skip message showed yt-dlp's raw
+  "Requested format is not available" text. The skip message has a Learn
+  more button that explains an outdated yt-dlp and what to do for your build:
+  install the latest release of the full build, or update yt-dlp yourself in
+  the minimal build.
+- **The log file now records errors when Meiro is opened from the desktop.**
+  Before, a launch with no standard error left the log empty, so a track that
+  was skipped had no reason in the log.
+
 ## [0.3.2] - 2026-10-17
 
 ### Changed

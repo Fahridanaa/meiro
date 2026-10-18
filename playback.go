@@ -231,6 +231,7 @@ func (a *app) skipUnplayable(item youtube.MusicItem) {
 	}
 	a.skipped++
 	a.notice = "Skipped " + item.Title + ": " + strings.TrimSuffix(a.playErr, ".")
+	a.noticeHelp = isFormatUnavailable(a.rawPlayErr)
 	a.startTrack(a.queue.moveTo(next), true)
 }
 

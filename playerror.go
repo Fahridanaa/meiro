@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // playErrorRules turn what yt-dlp, ffmpeg and the network say into a reason
 // the listener can act on. The first rule whose phrase the raw error holds
@@ -35,6 +38,10 @@ var playErrorRules = []struct {
 		"This track is no longer available.",
 	},
 	{
+		formatUnavailablePhrases,
+		"YouTube did not offer audio for this track. Try again later, or update Meiro.",
+	},
+	{
 		[]string{"playing needs ffmpeg"},
 		"Playing needs ffmpeg and yt-dlp, and one of them was not found.",
 	},
@@ -54,6 +61,16 @@ var playErrorRules = []struct {
 		[]string{"invalid data found", "unsupported", "no such file", "audio device"},
 		"This track's audio could not be played.",
 	},
+}
+
+// formatUnavailablePhrases are what yt-dlp says when YouTube gave it no audio
+// to take, which an old yt-dlp is the usual reason for.
+var formatUnavailablePhrases = []string{"requested format is not available", "no video formats found"}
+
+// isFormatUnavailable reports whether raw is yt-dlp finding no audio format.
+func isFormatUnavailable(raw string) bool {
+	lower := strings.ToLower(raw)
+	return slices.ContainsFunc(formatUnavailablePhrases, func(p string) bool { return strings.Contains(lower, p) })
 }
 
 // playErrorMessage is the short reason a track did not play, for raw, what
