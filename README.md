@@ -181,6 +181,10 @@ for advanced users. They need extra programs (`ffmpeg`, `yt-dlp`, and Node.js
 or Bun) that you must install yourself. If you pick one by mistake, playback
 will not work. Pick the file *without* `-minimal`.
 
+If you do use a minimal build, keep `yt-dlp` up to date (for example
+`yt-dlp -U`, or your package manager's latest). An old `yt-dlp` can cause slow
+or failed playback.
+
 Do not download the files named `update-*.json` or ending in `.delta`. Meiro
 uses those to update itself.
 
