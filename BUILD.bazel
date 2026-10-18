@@ -176,6 +176,7 @@ go_library(
         "//internal/audio",
         "//internal/cookies",
         "//internal/credits",
+        "//internal/discordrpc",
         "//internal/diskcache",
         "//internal/history",
         "//internal/keymap",

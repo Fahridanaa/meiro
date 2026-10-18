@@ -1,0 +1,25 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "discordrpc",
+    srcs = [
+        "dial_other.go",
+        "dial_unix.go",
+        "dial_windows.go",
+        "rpc.go",
+    ],
+    importpath = "github.com/elianiva/meiro/internal/discordrpc",
+    visibility = ["//:__subpackages__"],
+    deps = select({
+        "@rules_go//go/platform:windows": [
+            "@com_github_microsoft_go_winio//:go-winio",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+go_test(
+    name = "discordrpc_test",
+    srcs = ["rpc_test.go"],
+    embed = [":discordrpc"],
+)

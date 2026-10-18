@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Discord Rich Presence.** When enabled in Settings, Discord shows the
+  playing track, artist, cover and elapsed time. The status clears when
+  playback pauses or stops.
+
 ### Fixed
 
 - **YouTube brand channels can be switched from the account menu.** Meiro now

@@ -30,6 +30,7 @@ import (
 	"github.com/elianiva/meiro/internal/applog"
 	"github.com/elianiva/meiro/internal/audio"
 	"github.com/elianiva/meiro/internal/cookies"
+	"github.com/elianiva/meiro/internal/discordrpc"
 	"github.com/elianiva/meiro/internal/diskcache"
 	"github.com/elianiva/meiro/internal/memprof"
 	"github.com/elianiva/meiro/internal/proc"
@@ -39,6 +40,9 @@ import (
 	"github.com/elianiva/meiro/player"
 	"github.com/elianiva/meiro/systemmedia"
 )
+
+// Set this to Meiro's public Discord application ID before releasing.
+const discordPresenceApplicationID = ""
 
 func main() {
 	// The heap is mostly artwork, which lives as long as the user browses and
@@ -258,6 +262,10 @@ func (a *app) shutdown() {
 	a.scrobble.outbox.Wait()
 	a.scrobble.credits.Wait()
 	a.desktop.close()
+	if a.discord != nil {
+		a.discord.Close()
+		a.discord = nil
+	}
 	if a.media != nil {
 		if err := a.media.Close(); err != nil {
 			log.Printf("close system media controls: %v", err)
@@ -422,6 +430,7 @@ func repeatFromLoop(loop systemmedia.Loop) repeatMode {
 // path that changes playback calls it.
 func (a *app) syncSystemMedia() {
 	a.syncDesktop()
+	a.syncDiscordPresence()
 	if a.media == nil {
 		return
 	}
@@ -468,4 +477,49 @@ func (a *app) syncSystemMedia() {
 		}
 		a.media = nil
 	}
+}
+
+// syncDiscordPresence publishes only while playback is audible and the user
+// has enabled sharing. Discord IPC runs on its own worker, not the UI thread.
+func (a *app) syncDiscordPresence() {
+	if !a.settings.DiscordPresence {
+		a.closeDiscordPresence()
+		return
+	}
+	id, err := discordrpc.ParseApplicationID(discordPresenceApplicationID)
+	if err != nil {
+		a.closeDiscordPresence()
+		return
+	}
+	if a.desktop == nil {
+		return
+	}
+	if !a.player.Playing() || a.current.VideoID == "" {
+		if a.discord != nil {
+			a.discord.Update(discordrpc.State{})
+		}
+		return
+	}
+	if a.discord == nil {
+		a.discord = discordrpc.New(id)
+	}
+	a.discord.Update(discordrpc.State{
+		VideoID:     a.current.VideoID,
+		Title:       a.current.Title,
+		Artist:      a.current.Subtitle,
+		ArtworkURL:  a.current.Thumbnail,
+		Position:    a.player.Position(),
+		SeekVersion: a.seekVersion,
+		Playing:     true,
+	})
+}
+
+// closeDiscordPresence stops the old IPC worker away from the UI thread.
+func (a *app) closeDiscordPresence() {
+	if a.discord == nil {
+		return
+	}
+	session := a.discord
+	a.discord = nil
+	a.run(session.Close)
 }

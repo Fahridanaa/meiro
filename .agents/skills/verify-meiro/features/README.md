@@ -32,5 +32,6 @@ This directory is the maintained source for verifying what a Meiro user can do. 
 - [Playback and queue](./playback-queue.md) covers playing, the queue, repeat, shuffle, seeking, failures, resume, and the mini player.
 - [Account and library](./account-library.md) covers sign-in, like, subscribe, saving, and playlists.
 - [Settings and shortcuts](./settings-shortcuts.md) covers theme, equaliser, shortcuts, history, and Last.fm.
+- [Discord Rich Presence](./discord-presence.md) covers the settings, track activity, elapsed time, and clearing presence.
 - [Page states](./page-states.md) covers loading, empty, failed and offline pages, and Retry.
 - [Native-only behavior](./native-only.md) lists what no headless proof can show.

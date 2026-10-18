@@ -5,6 +5,7 @@ go 1.27.1
 tool github.com/egoist/mygo/cmd/mygo
 
 require (
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/ebitengine/oto/v3 v3.5.1
 	github.com/egoist/mygo v0.5.1
 	github.com/go-macos/objc v0.10.2

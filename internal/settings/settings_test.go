@@ -11,6 +11,7 @@ func TestWriterKeepsTheLastStateAndLoadRepairsIt(t *testing.T) {
 	w := &Writer{Path: path}
 	s := Defaults()
 	s.Mode = "dark"
+	s.DiscordPresence = true
 	w.Save(&s)
 	s.Seed = "#d81b78"
 	w.Save(&s)
@@ -18,7 +19,7 @@ func TestWriterKeepsTheLastStateAndLoadRepairsIt(t *testing.T) {
 	w.Wait()
 
 	got := Load(path)
-	if got.Mode != "dark" || got.Seed != "#d81b78" {
+	if got.Mode != "dark" || got.Seed != "#d81b78" || !got.DiscordPresence {
 		t.Errorf("loaded %+v", got)
 	}
 

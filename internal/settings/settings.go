@@ -64,6 +64,8 @@ type Settings struct {
 	GlobalShortcut bool `json:"globalShortcut"`
 	// ShowTray keeps an icon in the menu bar with transport controls.
 	ShowTray bool `json:"showTray"`
+	// DiscordPresence shares the current track with the running Discord client.
+	DiscordPresence bool `json:"discordPresence,omitempty"`
 	// CloseToTray hides the window instead of quitting when the user closes
 	// it, while the tray icon is shown. Empty means the user has not chosen
 	// yet, so closing asks.

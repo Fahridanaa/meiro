@@ -13,6 +13,7 @@ import (
 	"github.com/elianiva/meiro/internal/artwork"
 	"github.com/elianiva/meiro/internal/audio"
 	"github.com/elianiva/meiro/internal/cookies"
+	"github.com/elianiva/meiro/internal/discordrpc"
 	"github.com/elianiva/meiro/internal/history"
 	"github.com/elianiva/meiro/internal/lrclib"
 	"github.com/elianiva/meiro/internal/lru"
@@ -39,6 +40,7 @@ type app struct {
 	router  *ui.Router
 	player  *player.Player
 	media   systemmedia.Session
+	discord *discordrpc.Session
 	thumbs  *artwork.Cache
 
 	// run runs work off the main thread. Tests replace it with a runner

@@ -76,6 +76,11 @@ func (a *app) desktopCard(c *ui.Context) {
 					a.settings.GlobalShortcut = on
 					a.syncShortcut()
 				})
+			a.desktopSwitch(c, "Discord Rich Presence", "Share the track, artist, cover and elapsed time while music plays. The status clears when playback pauses or stops.",
+				a.settings.DiscordPresence, func(on bool) {
+					a.settings.DiscordPresence = on
+					a.syncSystemMedia()
+				})
 			a.desktopSwitch(c, "Open at login", "Start Meiro when you log in.",
 				a.settings.OpenAtLogin, func(on bool) {
 					a.settings.OpenAtLogin = on

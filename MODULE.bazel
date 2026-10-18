@@ -25,6 +25,7 @@ use_repo(
     "com_github_egoist_mygo",
     "com_github_go_macos_objc",
     "com_github_godbus_dbus_v5",
+    "com_github_microsoft_go_winio",
     "org_golang_x_image",
 )
 
