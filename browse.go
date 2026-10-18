@@ -973,47 +973,40 @@ func (a *app) closePlaylistSearch() {
 	a.detailFilter = ""
 }
 
-// playlistSort draws one compact field-and-direction control above the list.
+// playlistSort draws two controls above the list: a menu that picks what to
+// sort by, and a button that reverses the direction.
 func (a *app) playlistSort(c *ui.Context) {
-	label := "Sort: " + a.detailSort.label()
-	if a.detailSort.active() {
-		label += " · " + a.detailSort.directionLabel()
-	}
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		a.playlistSortField(c)
+		if a.detailSort.active() {
+			label, icon := "Sort descending", m3.IconArrowUp
+			if a.detailSort.desc {
+				label, icon = "Sort ascending", m3.IconArrowDown
+			}
+			if m3.IconButton(c, m3.IconButtonSpec{Icon: icon, Label: label, Kind: m3.OutlinedIcon, Size: m3.Medium56, Key: "playlist-sort-direction"}).Clicked() {
+				a.detailSort.flip()
+			}
+		}
+	})
+}
+
+// playlistSortField draws the button and menu that choose the sort field.
+func (a *app) playlistSortField(c *ui.Context) {
 	rotation := float32(0)
 	if a.detailSortOpen {
 		rotation = 180
 	}
-	anchor := m3.Button(c, m3.ButtonSpec{Label: label, Icon: m3.IconExpandMore, IconRotation: rotation, Kind: m3.Outlined, Size: m3.Medium56, Key: "playlist-sort"})
+	anchor := m3.Button(c, m3.ButtonSpec{Label: "Sort: " + a.detailSort.label(), Icon: m3.IconExpandMore, IconRotation: rotation, Kind: m3.Outlined, Size: m3.Medium56, Key: "playlist-sort"})
 	// A menu ignores the press that lands on the button that opened it, so
 	// the button closes it, as the account menu's button does.
 	if anchor.Clicked() {
 		a.detailSortOpen = !a.detailSortOpen
 	}
 	if a.detailSortOpen {
-		m3.Menu(c, anchor, &a.detailSortOpen, 280, func() {
-			choices := []struct {
-				field playlistSortField
-				label string
-			}{
-				{playlistSortOriginal, "Original order"},
-				{playlistSortTitle, "Title, A–Z"},
-				{playlistSortArtist, "Artist, A–Z"},
-				{playlistSortDuration, "Duration, shortest first"},
-			}
-			for _, choice := range choices {
-				item := m3.MenuItem(c, choice.label, nil)
-				if item.Clicked() {
-					a.detailSort.choose(choice.field)
-					a.detailSortOpen = false
-				}
-			}
-			if a.detailSort.active() {
-				label := "Sort descending"
-				if a.detailSort.desc {
-					label = "Sort ascending"
-				}
-				if m3.MenuItem(c, label, nil).Clicked() {
-					a.detailSort.desc = !a.detailSort.desc
+		m3.Menu(c, anchor, &a.detailSortOpen, 220, func() {
+			for _, field := range []playlistSortField{playlistSortOriginal, playlistSortTitle, playlistSortArtist, playlistSortDuration} {
+				if m3.MenuItem(c, playlistSort{field: field}.label(), nil).Clicked() {
+					a.detailSort.choose(field)
 					a.detailSortOpen = false
 				}
 			}

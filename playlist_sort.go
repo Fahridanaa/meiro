@@ -42,24 +42,6 @@ func (s playlistSort) label() string {
 	return "Original order"
 }
 
-func (s playlistSort) directionLabel() string {
-	switch s.field {
-	case playlistSortTitle, playlistSortArtist:
-		if s.desc {
-			return "Z–A"
-		}
-		return "A–Z"
-	case playlistSortDuration:
-		if s.desc {
-			return "Longest first"
-		}
-		return "Shortest first"
-	case playlistSortOriginal:
-		return "Original order"
-	}
-	return "Original order"
-}
-
 func (s *playlistSort) choose(field playlistSortField) {
 	if field == playlistSortOriginal {
 		*s = playlistSort{}
@@ -67,9 +49,14 @@ func (s *playlistSort) choose(field playlistSortField) {
 	}
 	if s.field != field {
 		s.field, s.desc = field, false
-		return
 	}
-	s.desc = !s.desc
+}
+
+// flip reverses the direction of an active sort.
+func (s *playlistSort) flip() {
+	if s.active() {
+		s.desc = !s.desc
+	}
 }
 
 // sortPlaylistSections sorts track slots independently within each section.

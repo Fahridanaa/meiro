@@ -399,17 +399,19 @@ func TestAPlaylistPageCanBeSorted(t *testing.T) {
 		t.Fatal(err)
 	}
 	tt.Frame()
-	if err := tt.Click("Title, A–Z"); err != nil {
+	if tt.HasText("Sort descending") {
+		t.Errorf("an unsorted page offers a direction: %q", tt.Texts())
+	}
+	if err := tt.Click("Title"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
 	if got := ids(a.page.playable); !slices.Equal(got, []string{"song-one", "song-three", "song-two"}) {
 		t.Fatalf("title sort queued %v, want song-one, song-three, song-two", got)
 	}
-	if err := tt.Click("Sort: Title · A–Z"); err != nil {
-		t.Fatal(err)
+	if !tt.HasText("Sort: Title") {
+		t.Errorf("the control does not name the field: %q", tt.Texts())
 	}
-	tt.Frame()
 	if err := tt.Click("Sort descending"); err != nil {
 		t.Fatal(err)
 	}
@@ -417,10 +419,18 @@ func TestAPlaylistPageCanBeSorted(t *testing.T) {
 	if got := ids(a.page.playable); !slices.Equal(got, []string{"song-two", "song-three", "song-one"}) {
 		t.Fatalf("title descending sort queued %v, want song-two, song-three, song-one", got)
 	}
-	if err := tt.Click("Sort: Title · Z–A"); err != nil {
+	// Choosing the field again keeps the direction.
+	if err := tt.Click("Sort: Title"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
+	if err := tt.Click("Title"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !a.detailSort.desc {
+		t.Fatalf("choosing the same field reset the direction: %#v", a.detailSort)
+	}
 	if err := tt.Click("Sort ascending"); err != nil {
 		t.Fatal(err)
 	}

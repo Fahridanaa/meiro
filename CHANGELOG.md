@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Playlist sort has a separate direction button.** The sort menu now only
+  picks what to sort by, and a button beside it reverses the order in one
+  click.
+
 ### Fixed
 
 - **A track that YouTube gives no audio for now says so in plain words.**
