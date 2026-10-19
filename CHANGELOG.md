@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-19
+
 ### Changed
 
 - **The tray mini player keeps its narrow, vertical shape, with smaller tabs
