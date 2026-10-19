@@ -486,7 +486,7 @@ func (a *app) nowPlayingView(c *ui.Context) {
 				a.nowPlayingMain(c, h)
 			}
 			if wide || a.nowPlaying.queueOnly {
-				a.sidePanel(c, wide)
+				a.sidePanel(c, wide, false)
 			}
 		})
 	})
@@ -547,31 +547,42 @@ func (a *app) nowPlayingArtwork(c *ui.Context, imageSize int, artSize, radius fl
 }
 
 // sidePanel holds the queue, lyrics and related songs under tabs, on a tonal card.
-func (a *app) sidePanel(c *ui.Context, wide bool) {
+func (a *app) sidePanel(c *ui.Context, wide, compactQueue bool) {
 	sc := m3.Of(c).Scheme
 	card := ui.Column(c.Key("np-side")).Radius(m3.ExtraLarge).Background(sc.SurfaceContainerLow.Alpha(0.9)).Clip().
-		Padding(8, 0, 0).Gap(4)
+		Gap(4)
+	if compactQueue {
+		card.Padding(4, 0, 0)
+	} else {
+		card.Padding(8, 0, 0)
+	}
 	if wide {
 		card.Width(480).Shrink(0)
 	} else {
-		card.Grow(1).MinWidth(0)
+		card.Grow(1).MinWidth(0).MinHeight(0)
 	}
 	card.Children(func() {
-		a.nowPlayingTabs(c)
+		a.nowPlayingTabs(c, compactQueue)
 		switch a.nowPlaying.tab {
 		case tabLyrics:
 			a.lyricsView(c)
 		case tabRelated:
 			a.relatedView(c)
 		case tabQueue:
-			a.queueView(c)
+			a.queueView(c, compactQueue)
 		}
 	})
 }
 
-func (a *app) nowPlayingTabs(c *ui.Context) {
+func (a *app) nowPlayingTabs(c *ui.Context, compact bool) {
 	sc := m3.Of(c).Scheme
-	ui.Row(c).Padding(12, 12, 8).Gap(4).Children(func() {
+	tabs := ui.Row(c)
+	if compact {
+		tabs.Padding(4, 8, 0)
+	} else {
+		tabs.Padding(12, 12, 8)
+	}
+	tabs.Gap(4).Children(func() {
 		for _, t := range panelTabs {
 			selected := a.nowPlaying.tab == t.tab
 			container, content := ui.Transparent, sc.OnSurfaceVariant
@@ -579,11 +590,23 @@ func (a *app) nowPlayingTabs(c *ui.Context) {
 				container, content = sc.SecondaryContainer, sc.OnSecondaryContainer
 			}
 			button := ui.ButtonBase(c.Key("np-tab-" + t.label))
-			button.Grow(1).Basis(0).MinWidth(0).Height(m3.MinTarget).PaddingX(4).Center().Radius(m3.Full).
-				Cursor(ui.CursorPointer).Label(t.label).Tooltip(t.label).
-				Background(m3.StateFill(container, content, button.Hovered(), button.Pressed(), button.FocusVisible()))
+			button.Grow(1).Basis(0).MinWidth(0).Height(m3.MinTarget).Center().Radius(m3.Full).
+				Cursor(ui.CursorPointer).Label(t.label).Tooltip(t.label).Background(ui.Transparent)
+			if compact {
+				button.Margin(-4, 0).Draw(func(p *ui.Painter, r ui.Rect) {
+					r.Y += (r.H - 40) / 2
+					r.H = 40
+					p.Fill(r, m3.StateFill(container, content, button.Hovered(), button.Pressed(), button.FocusVisible()), r.H/2)
+				})
+			} else {
+				button.Background(m3.StateFill(container, content, button.Hovered(), button.Pressed(), button.FocusVisible()))
+			}
 			button.Children(func() {
-				text := m3.Text(c, m3.LabelMedium, t.label).Grow(1).MinWidth(0).SingleLine().TextAlign(ui.Center).TextColor(content)
+				role := m3.LabelMedium
+				if compact {
+					role = m3.LabelSmall
+				}
+				text := m3.Text(c, role, t.label).SingleLine().TextAlign(ui.Center).TextColor(content)
 				if selected {
 					text.FontWeight(600)
 				}
@@ -597,35 +620,62 @@ func (a *app) nowPlayingTabs(c *ui.Context) {
 }
 
 // queueView lists the tracks of the queue, with the current one picked out.
-func (a *app) queueView(c *ui.Context) {
+func (a *app) queueView(c *ui.Context, compact bool) {
 	sc := m3.Of(c).Scheme
 	q := &a.queue
 	if q.source != "" {
-		ui.Column(c).Padding(8, 16, 4).Gap(2).Children(func() {
-			m3.Text(c, m3.BodySmall, "Playing from").TextColor(sc.OnSurfaceVariant)
-			m3.EmphasizedText(c, m3.TitleSmall, q.source).SingleLine()
-		})
+		if compact {
+			ui.Row(c).Padding(0, 16).Gap(8).AlignItems(ui.Center).Children(func() {
+				m3.Text(c, m3.BodySmall, "Playing from").Shrink(0).TextColor(sc.OnSurfaceVariant)
+				m3.EmphasizedText(c, m3.TitleSmall, q.source).Grow(1).MinWidth(0).SingleLine()
+			})
+		} else {
+			ui.Column(c).Padding(8, 16, 4).Gap(2).Children(func() {
+				m3.Text(c, m3.BodySmall, "Playing from").TextColor(sc.OnSurfaceVariant)
+				m3.EmphasizedText(c, m3.TitleSmall, q.source).SingleLine()
+			})
+		}
 	}
-	ui.Row(c).Padding(8, 16, 4).Gap(12).AlignItems(ui.Center).Children(func() {
+	rowPadding := float32(8)
+	rowBottomPadding := float32(4)
+	rowGap := float32(12)
+	if compact {
+		rowPadding, rowBottomPadding, rowGap = 0, 0, 8
+	}
+	ui.Row(c).Padding(rowPadding, 16, rowBottomPadding).Gap(rowGap).AlignItems(ui.Center).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-			m3.EmphasizedText(c, m3.TitleMedium, "Auto-play")
-			m3.Text(c, m3.BodySmall, "Add similar music when this queue ends.").TextColor(sc.OnSurfaceVariant).SingleLine()
+			if compact {
+				m3.EmphasizedText(c, m3.LabelMedium, "Auto-play")
+			} else {
+				m3.EmphasizedText(c, m3.TitleMedium, "Auto-play")
+				m3.Text(c, m3.BodySmall, "Add similar music when this queue ends.").TextColor(sc.OnSurfaceVariant).SingleLine()
+			}
 		})
 		on := a.settings.AutoPlay
-		if m3.Switch(c, &on, "Toggle auto-play").Changed() {
+		switchControl := m3.Switch
+		if compact {
+			switchControl = m3.CompactSwitch
+		}
+		if switchControl(c, &on, "Toggle auto-play").Changed() {
 			a.setAutoPlay(on)
 		}
 	})
-	ui.Column(c).FillWidth().Height(28).Shrink(0).Padding(0, 16, 4).Children(func() {
-		if a.upNext.err != "" {
+	if a.upNext.err != "" {
+		ui.Column(c).FillWidth().Height(24).Shrink(0).Padding(0, 16, 4).Children(func() {
 			m3.Text(c, m3.BodySmall, "Recommendations aren't available right now.").TextColor(sc.Error)
-		}
-	})
+		})
+	} else if !compact {
+		ui.Column(c).FillWidth().Height(28).Shrink(0).Padding(0, 16, 4).Children(func() {})
+	}
 	if q.len() == 0 {
 		a.message(c, m3.IconQueue, "The queue is empty", "", "", nil)
 		return
 	}
-	ui.Row(c).Padding(0, 16, 4).AlignItems(ui.Center).Children(func() {
+	headerBottomPadding := float32(4)
+	if compact {
+		headerBottomPadding = 0
+	}
+	ui.Row(c).Padding(0, 16, headerBottomPadding).AlignItems(ui.Center).Children(func() {
 		m3.Text(c, m3.BodySmall, strconv.Itoa(q.remaining())+" up next").Grow(1).TextColor(sc.OnSurfaceVariant)
 		m3.Button(c, m3.ButtonSpec{Label: "Clear queue", Kind: m3.TextOnly, Size: m3.ExtraSmall32, Disabled: q.remaining() < 1, Key: "queue-clear"}).OnClick(a.clearUpcoming)
 	})
@@ -657,17 +707,25 @@ func (a *app) queueView(c *ui.Context) {
 		a.nowPlaying.queueFollow = a.current.VideoID
 		list.ScrollTo(q.rowOf(q.index), ui.Start)
 	}
+	listBottomPadding := float32(16)
+	if compact {
+		listBottomPadding = 4
+	}
 	ui.List(c, list, q.rows(), func(row int) {
 		index, ok := q.trackAt(row)
 		if !ok {
-			ui.Column(c).Height(48).Padding(8, 16, 0).Gap(8).Children(func() {
+			height := float32(48)
+			if compact {
+				height = 36
+			}
+			ui.Column(c).Height(height).Padding(8, 16, 0).Gap(8).Children(func() {
 				ui.Divider(c)
 				m3.EmphasizedText(c, m3.TitleSmall, "Recommended").TextColor(sc.OnSurfaceVariant).SingleLine()
 			})
 			return
 		}
-		a.songRow(c, q.at(index), q.items, songOptions{directQueue: true, source: q.source, list: "queue", position: index})
-	}).Grow(1).Padding(0, 8, 16)
+		a.songRow(c, q.at(index), q.items, songOptions{directQueue: true, source: q.source, list: "queue", position: index, compact: compact})
+	}).Grow(1).Padding(0, 8, listBottomPadding)
 }
 
 func (a *app) relatedView(c *ui.Context) {

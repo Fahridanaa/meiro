@@ -13,9 +13,9 @@ import (
 // Size of the tray's mini player in DIPs.
 const (
 	miniWidth = 344
-	miniArt   = 72
-	// miniHeight fits the controls and the side panel under them. It never
-	// changes: a native popover that resizes draws its content stretched.
+	miniArt   = 64
+	// miniHeight keeps the flyout narrow and tall, with room for the queue.
+	// It never changes: a native popover that resizes draws its content stretched.
 	miniHeight = 640
 )
 
@@ -29,32 +29,34 @@ func (a *app) miniPlayer(c *ui.Context) {
 	a.followArtwork()
 	m3.Provide(c, a.resolveTheme(c))
 	sc := m3.Of(c).Scheme
-	col := ui.Column(c.Key("mini")).Fill().Padding(16).Gap(12).Background(sc.SurfaceContainer)
+	col := ui.Column(c.Key("mini")).Fill().Padding(12).Gap(8).Background(sc.SurfaceContainer)
 	if runtime.GOOS != "darwin" {
 		// macOS rounds the popover itself.
 		col.Radius(m3.ExtraLarge)
 	}
 	col.Children(func() {
-		ui.Row(c).Gap(14).AlignItems(ui.Center).Children(func() {
-			// Drawn at playerArt pixels, the size followArtwork takes its colour
-			// from, so the picture it needs is the one this frame fetches.
-			a.art(c, a.current.Thumbnail, playerArt, miniArt, m3.Large, func() {
-				if a.current.IsVideo() {
-					m3.VideoBadge(c, miniArt)
+		ui.Column(c).Key("mini-content").Grow(1).MinHeight(0).Gap(8).Children(func() {
+			ui.Row(c).Key("mini-player").Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+				// Drawn at playerArt pixels, the size followArtwork takes its colour
+				// from, so the picture it needs is the one this frame fetches.
+				a.art(c, a.current.Thumbnail, playerArt, miniArt, m3.Large, func() {
+					if a.current.IsVideo() {
+						m3.VideoBadge(c, miniArt)
+					}
+				})
+				if a.current.VideoID == "" {
+					ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+						m3.EmphasizedText(c, m3.TitleMedium, "Nothing playing").TextColor(sc.OnSurface)
+						m3.Text(c, m3.BodySmall, "Pick something in Meiro").TextColor(sc.OnSurfaceVariant)
+					})
+				} else {
+					a.trackLine(c, m3.TitleSmall, m3.BodySmall).Grow(1)
 				}
 			})
-			if a.current.VideoID == "" {
-				ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-					m3.EmphasizedText(c, m3.TitleMedium, "Nothing playing").TextColor(sc.OnSurface)
-					m3.Text(c, m3.BodySmall, "Pick something in Meiro").TextColor(sc.OnSurfaceVariant)
-				})
-				return
-			}
-			a.trackLine(c, m3.TitleMedium, m3.BodyMedium).Grow(1)
+			a.scrubber(c)
+			a.transport(c, 48, 4)
+			a.sidePanel(c, false, true)
 		})
-		a.scrubber(c)
-		a.transport(c, 52, 4)
-		a.sidePanel(c, false)
 		ui.Row(c).Gap(8).Justify(ui.SpaceBetween).AlignItems(ui.Center).Children(func() {
 			if m3.Button(c, m3.ButtonSpec{Label: "Open Meiro", Kind: m3.Tonal, Key: "mini-open"}).Clicked() {
 				a.desktop.closeMini()

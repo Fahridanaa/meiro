@@ -20,8 +20,17 @@ func pick[T any](b bool, yes, no T) T {
 // it is on, shrinks when it is off and swells while pressed, with a check
 // mark in the thumb when on. It toggles *on by itself.
 func Switch(c *ui.Context, on *bool, label string) ui.Element {
+	return switchWithTrack(c, on, label, 52, 32)
+}
+
+// CompactSwitch draws a smaller track while keeping the usual pointer target.
+func CompactSwitch(c *ui.Context, on *bool, label string) ui.Element {
+	return switchWithTrack(c, on, label, 48, 28)
+}
+
+func switchWithTrack(c *ui.Context, on *bool, label string, trackWidth, trackHeight float32) ui.Element {
 	sc := Of(c).Scheme
-	s := ui.SwitchBase(c.Key("switch-"+label), on).Size(52, MinTarget).Margin(-slop(32), 0).Label(label).
+	s := ui.SwitchBase(c.Key("switch-"+label), on).Size(max(trackWidth, MinTarget), MinTarget).Margin(-slop(trackHeight), 0).Label(label).
 		Cursor(ui.CursorPointer).Shrink(0)
 	v := *on
 	progress := Animate(s, "on", pick(v, float32(1), 0), SpatialFast)
@@ -33,28 +42,30 @@ func Switch(c *ui.Context, on *bool, label string) ui.Element {
 		track, outline, thumb, glyph = sc.Primary, sc.Primary, sc.OnPrimary, sc.OnPrimaryContainer
 	}
 	s.Draw(func(p *ui.Painter, r ui.Rect) {
-		// The track is 32 high in the middle of the taller pointer target.
-		r = ui.Rect{X: r.X, Y: r.Y + (r.H-32)/2, W: r.W, H: 32}
+		// Center the track in the taller pointer target.
+		r = ui.Rect{X: r.X + (r.W-trackWidth)/2, Y: r.Y + (r.H-trackHeight)/2, W: trackWidth, H: trackHeight}
 		p.Fill(r, track, r.H/2)
 		if !v {
-			p.Stroke(r, outline, r.H/2, 2)
+			p.Stroke(r, outline, r.H/2, trackHeight/16)
 		}
-		size := float32(16) + 8*min(max(progress, 0), 1.2)
+		size := trackHeight/2 + trackHeight/4*min(max(progress, 0), 1.2)
 		if pressed {
-			size = 28
+			size = trackHeight - 4
 		}
-		cx := r.X + 16 + (r.W-32)*progress
+		cx := r.X + trackHeight/2 + (r.W-trackHeight)*progress
 		cy := r.Y + r.H/2
 		if hovered || focused {
 			halo := thumb
 			if !v {
 				halo = sc.OnSurface
 			}
-			p.Fill(ui.Rect{X: cx - 20, Y: cy - 20, W: 40, H: 40}, halo.Alpha(StateHover+0.02), 20)
+			haloSize := trackHeight + 8
+			p.Fill(ui.Rect{X: cx - haloSize/2, Y: cy - haloSize/2, W: haloSize, H: haloSize}, halo.Alpha(StateHover+0.02), haloSize/2)
 		}
 		p.Fill(ui.Rect{X: cx - size/2, Y: cy - size/2, W: size, H: size}, thumb, size/2)
 		if v && progress > 0.5 {
-			p.Icon(IconCheck, ui.Rect{X: cx - 8, Y: cy - 8, W: 16, H: 16}, glyph)
+			glyphSize := trackHeight / 2
+			p.Icon(IconCheck, ui.Rect{X: cx - glyphSize/2, Y: cy - glyphSize/2, W: glyphSize, H: glyphSize}, glyph)
 		}
 	})
 	return s

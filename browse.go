@@ -463,6 +463,8 @@ type songOptions struct {
 	// rather than from the page.
 	directQueue bool
 	source      string
+	// compact fits queue rows in the tray mini player.
+	compact bool
 }
 
 // songKey identifies a row of a song in its list, for the element tree and
@@ -479,8 +481,15 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 	isSong := item.IsTrack()
 	playing := isSong && item.VideoID == a.current.VideoID
 	key := songKey(item, o)
+	height, artSize, padding, gap, iconSize := float32(rowHeight), float32(48), float32(8), float32(12), float32(24)
+	titleRole, subtitleRole := m3.BodyLarge, m3.BodyMedium
+	artPixels := 128
+	if o.compact {
+		height, artSize, padding, gap, iconSize, artPixels = 44, 32, 4, 8, 20, 96
+		titleRole, subtitleRole = m3.TitleSmall, m3.BodySmall
+	}
 	row := ui.Row(c.Key(key))
-	row.Height(rowHeight).Shrink(0).Padding(8, 8).Gap(4).AlignItems(ui.Center).Radius(m3.Large)
+	row.Height(height).Shrink(0).Padding(padding, 8).Gap(4).AlignItems(ui.Center).Radius(m3.Large)
 	if o.inset {
 		row.Margin(0, pageGutter-8)
 	}
@@ -493,7 +502,7 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 	row.Children(func() {
 		main = ui.ButtonBase(c.Key(key + "-activate"))
 		hovered := row.Hovered()
-		main.Grow(1).Basis(0).MinWidth(0).Height(rowHeight - 16).Gap(12).AlignItems(ui.Center).
+		main.Grow(1).Basis(0).MinWidth(0).Height(height - 2*padding).Gap(gap).AlignItems(ui.Center).
 			Radius(m3.Large).Cursor(ui.CursorPointer).Label(item.Title).Background(ui.Transparent)
 		row.Background(m3.StateFill(container, sc.OnSurface, hovered && !playing, main.Pressed(), main.FocusVisible()))
 		main.Children(func() {
@@ -502,44 +511,44 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 				titleColour, subColour = sc.OnSecondaryContainer, sc.OnSecondaryContainer.Alpha(0.8)
 			}
 			if o.number > 0 {
-				ui.Row(c).Size(48, 48).Shrink(0).Center().Children(func() {
+				ui.Row(c).Size(artSize, artSize).Shrink(0).Center().Children(func() {
 					switch {
 					case playing && a.loading():
-						m3.LoadingIndicatorIn(c, 24, sc.Primary)
+						m3.LoadingIndicatorIn(c, iconSize, sc.Primary)
 					case playing:
 						m3.Equalizer(c, 18, a.player.Playing(), sc.Primary)
 					case hovered && isSong:
-						ui.Icon(c, m3.IconPlay).FontSize(24).TextColor(sc.OnSurface)
+						ui.Icon(c, m3.IconPlay).FontSize(iconSize).TextColor(sc.OnSurface)
 					default:
 						m3.Text(c, m3.BodyLarge, strconv.Itoa(o.number)).TextColor(sc.OnSurfaceVariant)
 					}
 				})
 			} else {
-				a.art(c, item.Thumbnail, 128, 48, artRadius(item, m3.Medium), func() {
+				a.art(c, item.Thumbnail, artPixels, artSize, artRadius(item, m3.Medium), func() {
 					if isSong && (playing || hovered) {
 						ui.Box(c).Fill().Attach(ui.AnchorTopLeft, ui.AnchorTopLeft).Radius(artRadius(item, m3.Medium)).Center().Background(sc.Scrim.Alpha(0.45)).Children(func() {
 							switch {
 							case playing && a.loading():
-								m3.LoadingIndicatorIn(c, 24, ui.RGB(255, 255, 255))
+								m3.LoadingIndicatorIn(c, iconSize, ui.RGB(255, 255, 255))
 							case playing:
 								m3.Equalizer(c, 18, a.player.Playing(), ui.RGB(255, 255, 255))
 							default:
-								ui.Icon(c, m3.IconPlay).FontSize(24).TextColor(ui.RGB(255, 255, 255))
+								ui.Icon(c, m3.IconPlay).FontSize(iconSize).TextColor(ui.RGB(255, 255, 255))
 							}
 						})
 					}
 					if item.IsVideo() {
-						m3.VideoBadge(c, 48)
+						m3.VideoBadge(c, artSize)
 					}
 				})
 			}
 			ui.Column(c).Grow(1).MinWidth(0).Gap(0).Children(func() {
-				title := m3.Text(c, m3.BodyLarge, item.Title).SingleLine().TextColor(titleColour)
+				title := m3.Text(c, titleRole, item.Title).SingleLine().TextColor(titleColour)
 				if playing {
 					title.FontWeight(600)
 				}
 				if item.Subtitle != "" {
-					m3.Text(c, m3.BodyMedium, item.Subtitle).SingleLine().TextColor(subColour)
+					m3.Text(c, subtitleRole, item.Subtitle).SingleLine().TextColor(subColour)
 				}
 			})
 			switch {

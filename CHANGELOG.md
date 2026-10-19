@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **The tray mini player keeps its narrow, vertical shape, with smaller tabs
+  and auto-play controls and more upcoming tracks visible.**
+
 ## [0.4.0] - 2026-10-18
 
 ### Added

@@ -41,15 +41,39 @@ func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	}
 }
 
-func TestMiniPlayerAlwaysShowsTabs(t *testing.T) {
+func TestMiniPlayerShowsTabsAndSeveralQueueItems(t *testing.T) {
 	a := newTestApp(t)
-	a.queue.restore(playstate.State{Items: tracks("a", "b"), Index: 0, RecStart: -1})
+	items := tracks("a", "b", "c", "d", "e", "f")
+	for i := range items {
+		items[i].Subtitle = "Artist " + items[i].VideoID
+	}
+	a.queue.restore(playstate.State{Items: items, Index: 0, RecStart: -1, Source: "Reiwa Era J-Pop"})
 	a.current = a.queue.current()
 	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
 	a.setMiniShown(true)
 	tt.Frame()
-	if !tt.HasText("Lyrics") || !tt.HasText("Related") || !tt.HasText("Track b") {
-		t.Fatalf("the panel is not shown: %q", tt.Texts())
+	for _, text := range []string{"Lyrics", "Related", "Playing from", "Reiwa Era J-Pop", "Auto-play", "Clear queue", "Track b", "Track e", "Artist e"} {
+		if !tt.HasText(text) {
+			t.Fatalf("the panel does not show %q: %q", text, tt.Texts())
+		}
+	}
+	track, hasTrack := tt.Find("Track a")
+	lyrics, hasLyrics := tt.Find("Lyrics")
+	if !hasTrack || !hasLyrics || lyrics.Y <= track.Y {
+		t.Fatalf("the queue panel is not below the player: track %v, lyrics %v", track, lyrics)
+	}
+	lastTrack, hasLastTrack := tt.Find("Track e")
+	footer, hasFooter := tt.Find("Open Meiro")
+	if !hasLastTrack || !hasFooter || lastTrack.Y+lastTrack.H > footer.Y {
+		t.Fatalf("the queue does not show Track e above its footer: track %v, footer %v", lastTrack, footer)
+	}
+	autoPlay := a.settings.AutoPlay
+	if err := tt.Click("Toggle auto-play"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.settings.AutoPlay == autoPlay {
+		t.Fatal("the compact auto-play switch did not toggle")
 	}
 	if err := tt.Click("Lyrics"); err != nil {
 		t.Fatal(err)
