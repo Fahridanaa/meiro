@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Windows has a portable download.** Extract the ZIP and run Meiro without
+  installing it.
+
 ### Changed
 
 - **The player bar keeps its mute button in narrow windows.** Hover it to
@@ -15,6 +20,10 @@ and this project adheres to
 - **The Linux tray menu now offers Open Meiro and Quit.** AppIndicator does
   not report icon position, so Meiro does not offer its custom tray mini
   player on Linux; Open Meiro restores the main window.
+- **Discord Rich Presence shows a time bar with the track's length** instead
+  of only the elapsed time.
+- **Discord's member list shows the artist you are listening to** instead of
+  Meiro's name.
 
 ### Fixed
 
@@ -35,6 +44,11 @@ and this project adheres to
 
 - **The tray mini player keeps its narrow, vertical shape, with smaller tabs
   and auto-play controls and more upcoming tracks visible.**
+- **The playlist sort direction button also reverses the original order.** The
+  button now stays before a field is chosen, and descending reads the whole
+  playlist backwards, across its sections, which is what you want when you look
+  for the songs you added last. Choosing another field also keeps the direction
+  the page was in, instead of resetting it.
 
 ### Fixed
 
@@ -56,7 +70,6 @@ and this project adheres to
   the active channel as selected.
 - **Tracks now play while signed in.** Stream URLs resolve without account
   cookies, and YouTube playback history is reported after audio starts.
-
 ## [0.3.3] - 2026-10-18
 
 ### Changed

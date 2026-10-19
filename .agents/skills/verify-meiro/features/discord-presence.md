@@ -1,13 +1,13 @@
 # Discord Rich Presence
 
 When enabled and Discord is running, Meiro shares the current track, artist,
-cover and elapsed time. Paused or stopped playback clears the activity. The
-feature is off by default.
+cover, elapsed time and track length. Paused or stopped playback clears the
+activity. The feature is off by default.
 
 ## Sub-features
 
 - `discord-presence-settings` saves the opt-in switch. Meiro supplies its application ID in the app build.
-- `discord-presence-playback` publishes the current track, artist, artwork and elapsed timestamp.
+- `discord-presence-playback` publishes the current track, artist, artwork, and start and end timestamps. Discord draws a time bar from them; the end is left out while the length is unknown. The member list shows the artist, or Meiro's name when the track credits none.
 - `discord-presence-clear` clears the activity on pause, stop, disable or app exit.
 - `discord-presence-reconnect` retries when Discord is not running or its IPC connection closes.
 - `discord-presence-flatpak` finds the socket a Flatpak Discord exports under `$XDG_RUNTIME_DIR/app/<id>/`.
@@ -26,10 +26,10 @@ Preconditions:
 - The RPC protocol test uses an in-memory local pipe. It does not need Discord, credentials or network access.
 
 - **Settings.** Enable `Discord Rich Presence`. The switch persists in `settings.json`; users do not enter an application ID.
-- **Activity and keepalive.** `go test ./internal/discordrpc` runs the RPC handshake, verifies the `SET_ACTIVITY` payload, confirms pause sends a null activity, and checks that an idle session answers Discord's PING with PONG.
-- **Native Discord.** Meiro's public application ID is bundled in `main.go`. Run Meiro and Discord on the same desktop, enable the setting, and play a public track. Confirm Discord shows the track and artist, then pause playback and confirm the activity clears.
 - **Flatpak socket.** Point `XDG_RUNTIME_DIR` at a temp directory that holds `app/com.discordapp.Discord/discord-ipc-0`, listen on it, and call `discordrpc.New`. The handshake and the `SET_ACTIVITY` frame arrive at that path. This needs a real Unix listener, so it is a scratch proof, not a committed test. Set `TMPDIR`, `TMP` and `TEMP` to an existing empty directory too, because `dialDiscord` still dials the real `/tmp` and a native Discord there would answer first.
 - **Settings switch.** `tt.Click` on the label misses the switch, because the row label and the switch are separate elements. Find the row with `tt.Find("Discord Rich Presence")` and click `row.X+row.W+20` at the row's middle height. Read `a.settings.DiscordPresence` and the saved `settings.json` (`"discordPresence": true`, indented) as the second view.
+- **Activity and keepalive.** `go test ./internal/discordrpc` runs the RPC handshake, verifies the `SET_ACTIVITY` payload, checks that the end timestamp is added once the track length arrives, confirms pause sends a null activity, and checks that an idle session answers Discord's PING with PONG.
+- **Native Discord.** Meiro's public application ID is bundled in `main.go`. Run Meiro and Discord on the same desktop, enable the setting, and play a public track. Confirm Discord shows the track, artist and a time bar ending at the track's length, and that the member list reads the artist, then pause playback and confirm the activity clears.
 
 ## Gotchas
 
