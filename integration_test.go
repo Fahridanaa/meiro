@@ -38,6 +38,23 @@ func signedInApp(t *testing.T) *app {
 	return a
 }
 
+func TestDiscordPresenceStateUsesCreditedArtist(t *testing.T) {
+	item := youtube.MusicItem{
+		VideoID:   "track-1",
+		Title:     "Song",
+		Subtitle:  "Song • Artist • Album • 3:42",
+		Artist:    "Artist",
+		Thumbnail: "https://i.ytimg.com/cover.jpg",
+	}
+	got := discordPresenceState(item, 42*time.Second, 3)
+	if got.VideoID != item.VideoID || got.Title != item.Title || got.Artist != item.Artist || got.ArtworkURL != item.Thumbnail {
+		t.Fatalf("Discord state = %+v, want fields from the track and its credited artist", got)
+	}
+	if got.Position != 42*time.Second || got.SeekVersion != 3 || !got.Playing {
+		t.Errorf("Discord playback state = %+v, want position 42s, seek version 3, playing", got)
+	}
+}
+
 func TestEveryPageLoadsAndDraws(t *testing.T) {
 	pages := []struct {
 		path string

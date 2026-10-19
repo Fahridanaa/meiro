@@ -13,6 +13,11 @@ and this project adheres to
 - **The tray mini player keeps its narrow, vertical shape, with smaller tabs
   and auto-play controls and more upcoming tracks visible.**
 
+### Fixed
+
+- **Discord Rich Presence shows the credited artist.** It no longer shows the
+  song's full subtitle, which could also include the song type, album or length.
+
 ## [0.4.0] - 2026-10-18
 
 ### Added

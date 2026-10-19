@@ -39,6 +39,7 @@ import (
 	"github.com/elianiva/meiro/m3"
 	"github.com/elianiva/meiro/player"
 	"github.com/elianiva/meiro/systemmedia"
+	"github.com/elianiva/meiro/youtube"
 )
 
 // Discord Rich Presence uses Meiro's public Discord application ID.
@@ -503,15 +504,21 @@ func (a *app) syncDiscordPresence() {
 	if a.discord == nil {
 		a.discord = discordrpc.New(id)
 	}
-	a.discord.Update(discordrpc.State{
-		VideoID:     a.current.VideoID,
-		Title:       a.current.Title,
-		Artist:      a.current.Subtitle,
-		ArtworkURL:  a.current.Thumbnail,
-		Position:    a.player.Position(),
-		SeekVersion: a.seekVersion,
+	a.discord.Update(discordPresenceState(a.current, a.player.Position(), a.seekVersion))
+}
+
+// discordPresenceState selects the fields from the current track that belong
+// in Discord's compact activity, rather than forwarding its display subtitle.
+func discordPresenceState(item youtube.MusicItem, position time.Duration, seekVersion uint64) discordrpc.State {
+	return discordrpc.State{
+		VideoID:     item.VideoID,
+		Title:       item.Title,
+		Artist:      item.Artist,
+		ArtworkURL:  item.Thumbnail,
+		Position:    position,
+		SeekVersion: seekVersion,
 		Playing:     true,
-	})
+	}
 }
 
 // closeDiscordPresence stops the old IPC worker away from the UI thread.
