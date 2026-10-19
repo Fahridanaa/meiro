@@ -18,6 +18,9 @@ and this project adheres to
 
 ### Fixed
 
+- **Button labels stay whole when they fit.** Theme, playlist and shortcut
+  buttons no longer lose the end of a label to an ellipsis because of small
+  differences in platform font measurements.
 - **Linux packages install the AppIndicator runtime needed to show the tray icon.**
 - **Home shelves no longer show scrollbars over their artwork.** Use the left
   and right arrows to move through a shelf.
