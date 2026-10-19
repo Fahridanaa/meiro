@@ -27,6 +27,9 @@ and this project adheres to
 
 ### Fixed
 
+- **Discord Rich Presence works with a Flatpak Discord.** Meiro finds the
+  socket Flatpak exports, so the manual symlink workaround is no longer
+  needed.
 - **Button labels stay whole when they fit.** Theme, playlist and shortcut
   buttons no longer lose the end of a label to an ellipsis because of small
   differences in platform font measurements.
