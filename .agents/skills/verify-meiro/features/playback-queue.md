@@ -19,6 +19,7 @@ A user plays a track, controls the player bar, edits the queue, and finds the sa
 - Click a track row. Click `Play` or `Shuffle` on an album, playlist or artist page.
 - Use the player bar buttons `Shuffle`, `Previous`, `Next`, `Repeat`, `Mute`, and the `Position` and `Volume` sliders.
 - Click `Up next` in the player bar, or `Open the player`, to open the player panel with `Up next`, `Lyrics` and `Related`.
+- Open the tray mini player from the tray icon on macOS and Windows. On Linux, choose `Open Meiro` from the tray menu to restore the main window; Linux does not offer the tray mini player.
 - Right click a track for `Play next` and `Add to queue`.
 - Press `Space`, `Cmd+Shift+L`, `Cmd+Shift+J`, `Cmd+Shift+R`, `Cmd+Shift+S`.
 
@@ -36,7 +37,8 @@ Preconditions:
 - **Real audio.** Make a tone with `ffmpeg -f lavfi -i sine=duration=3`, set `r.file`, click the track, then loop `a.poll()` and `time.Sleep(10ms)` until `a.player.Position()` passes 500ms and `a.player.Playing()` is true. Then `p.step("heard")`. Verified: position reaches 700ms in under half a second.
 - **Resume.** Mirror `TestPlaybackResumesWhereItWasLeft`. A second app on the same data comes back paused.
 - **Lyrics.** In the player panel, `Lyrics` loads YouTube Music's timed lines, then LRCLIB's (`a.lyricsSource`, stubbed to nothing in `newTestApp`; set it to return `lrclib.Lyrics`). A track with timed lines shows `Synced` and `Static` chips; `Static` saves `StaticLyrics`. The lit line follows `a.playbackPosition()`, so set `a.total` as well as `a.scrub`, or the position slider clamps it back to 0. Use a window wider than 1180 to see the panel beside the player.
-- **Mini player.** `ui.NewTester(a.miniPlayer, miniWidth, miniHeight)`. `Nothing playing` shows when idle. The artwork, track details, scrubber and transport sit above a compact queue with its source; with a long queue, verify at least `Track e` is visible. Call `a.setMiniShown(true)` to load the panel, as opening the tray player does. Check the `Track a` and `Lyrics` bounds to confirm the vertical layout.
+- **Mini player.** `ui.NewTester(a.miniPlayer, miniWidth, miniHeight)`. `Nothing playing` shows when idle. The artwork, track details, scrubber and transport sit above a compact queue with its source; with a long queue, verify at least `Track e` is visible. Call `a.setMiniShown(true)` to load the panel, as opening the tray player does on macOS and Windows. Check the `Track a` and `Lyrics` bounds to confirm the vertical layout.
+- **Linux tray.** The minimal AppIndicator menu offers `Open Meiro` and `Quit`. `Open Meiro` restores the main window rather than creating a separate mini-player flyout. The tray also needs the AppIndicator runtime and a StatusNotifier-capable panel; see [Linux troubleshooting](../../../../README.md#troubleshooting).
 
 ## Gotchas
 

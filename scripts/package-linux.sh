@@ -67,6 +67,7 @@ homepage: https://github.com/elianiva/meiro
 depends:
   - gtk3
   - webkit2gtk4.1
+  - libayatana-appindicator-gtk3
 rpm:
   compression: xz
 contents:

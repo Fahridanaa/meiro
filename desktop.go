@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -166,9 +167,11 @@ type trayState struct {
 }
 
 // setTray shows the tray icon with state while on is set, and removes it
-// otherwise. A click on the icon opens the mini player, which holds what a
-// menu would. It changes the tooltip only when it changed: playback calls it
-// four times a second.
+// otherwise. On macOS and Windows, a click opens the mini player. Linux uses a
+// minimal menu to open the main window or quit: AppIndicator does not report
+// icon clicks or position, so MyGo centers tray flyouts in the primary
+// display's work area instead of anchoring them to the icon. It changes the
+// tooltip only when it changed: playback calls it four times a second.
 func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context), shown func(bool)) {
 	if d == nil {
 		return
@@ -190,17 +193,24 @@ func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context), show
 		if err != nil {
 			log.Printf("tray icon unavailable: %v", err)
 		}
-		tray, err := mygo.NewTray(mygo.TrayOptions{
+		onOpenMiniPlayer := func() { d.update(func() { d.showMini(mini, shown) }) }
+		options := mygo.TrayOptions{
 			Icon:           icon,
 			IconIsTemplate: true,
 			ToolTip:        state.tip,
-		})
+		}
+		if runtime.GOOS == "linux" {
+			options.Menu = linuxTrayMenu(func() { d.update(d.bringToFront) })
+		}
+		tray, err := mygo.NewTray(options)
 		if err != nil {
 			log.Printf("showing the tray icon: %v", err)
 			d.trayFailed = true
 			return
 		}
-		tray.OnClick(func() { d.update(func() { d.showMini(mini, shown) }) })
+		if runtime.GOOS != "linux" {
+			tray.OnClick(onOpenMiniPlayer)
+		}
 		d.tray, d.trayShown = tray, state
 		return
 	}
@@ -209,6 +219,17 @@ func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context), show
 	}
 	d.trayShown = state
 	d.tray.SetToolTip(state.tip)
+}
+
+// linuxTrayMenu offers only window restore and quit. Linux tray protocols do
+// not deliver primary icon clicks or icon position; MyGo centers tray flyouts
+// in the primary display's work area.
+func linuxTrayMenu(openMeiro func()) *mygo.Menu {
+	return mygo.NewMenu([]*mygo.MenuItem{
+		{Label: "Open Meiro", Click: func(*mygo.MenuItem, *mygo.Window) { openMeiro() }},
+		mygo.Separator(),
+		{Role: mygo.RoleQuit},
+	})
 }
 
 // trayIcon reads the app icon for the menu bar, scaled by the system.

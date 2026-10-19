@@ -70,8 +70,11 @@ half of the title.
   the music does not stop.
 - **Pick up where you left off.** Open Meiro again and your queue and song are
   waiting for you.
-- **Keeps playing when you close the window.** A mini player in the tray lets
-  you control it without opening the app.
+- **Keeps playing when you close the window.** On macOS and Windows, the tray
+  opens a mini player for playback controls. **Linux limitation:** AppIndicator
+  does not report the tray icon's position, so MyGo would place a flyout in the
+  center of the primary display's work area instead of beside the icon. Meiro
+  skips that flyout and offers only **Open Meiro** and **Quit**.
 - **Works with your computer's controls.** Use your media keys, the Now Playing
   widget on Mac, or the media controls on Linux.
 - **Share what you hear on Discord.** With Discord running, enable Discord
@@ -203,7 +206,11 @@ notarized by Apple yet, so the first time, right-click it and choose **Open**
 **Linux**: install the `.deb` on Debian or Ubuntu, or the `.rpm` on Fedora or a
 compatible RPM-based distribution. You can also make the `.AppImage` executable
 and run it, or unpack the `.tar.gz` and run its `install.sh`. All Linux builds
-need GTK 3 and WebKitGTK 4.1.
+need GTK 3 and WebKitGTK 4.1. The tray also needs the AppIndicator runtime:
+Debian/Ubuntu packages install `libayatana-appindicator3-1`, and Fedora packages
+install `libayatana-appindicator-gtk3`. If you use an AppImage or `.tar.gz`,
+install the matching package yourself. Other distributions may use a different
+package name.
 
 **Windows**: run the `-setup.exe` installer. **Windows support is untested.**
 I don't have Windows to test it, but it's there if you want it. Feel free to
@@ -315,6 +322,20 @@ terminal to check them. The log header shows which versions Meiro found.
 
 **Linux does not start.** Meiro needs GTK 3 and WebKitGTK 4.1. Install them
 with your package manager.
+
+**The Linux tray icon is missing, or Open Meiro does not restore the window.**
+The tray needs the AppIndicator runtime and a desktop panel that supports
+AppIndicator or StatusNotifier icons. GNOME may need an AppIndicator extension
+enabled. The `.deb` and `.rpm` packages install the runtime; for an AppImage or
+`.tar.gz`, install `libayatana-appindicator3-1` on Debian/Ubuntu or
+`libayatana-appindicator-gtk3` on Fedora. When the icon appears, choose
+**Open Meiro** from its menu to restore the main window. Linux tray protocols
+do not report icon clicks or icon position, so a separate mini-player flyout
+would open in the center of the primary display's work area rather than beside
+the tray icon. Meiro skips that flyout; its Linux tray menu only offers
+**Open Meiro** and **Quit**. If the tray is unavailable, the main player still
+works, but **Close to tray** does not. Linux media controls use MPRIS and do
+not depend on the tray.
 
 **macOS says the app can't be opened.** Meiro is not notarized yet. Right-click
 it and choose **Open**, or allow it in System Settings > Privacy & Security.

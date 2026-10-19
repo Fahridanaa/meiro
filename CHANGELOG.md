@@ -8,6 +8,16 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **The Linux tray menu now offers Open Meiro and Quit.** AppIndicator does
+  not report icon position, so Meiro does not offer its custom tray mini
+  player on Linux; Open Meiro restores the main window.
+
+### Fixed
+
+- **Linux packages install the AppIndicator runtime needed to show the tray icon.**
+
 ## [0.4.1] - 2026-10-19
 
 ### Changed

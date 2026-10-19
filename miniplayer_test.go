@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/internal/artwork"
@@ -38,6 +39,20 @@ func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	tt.Frame()
 	if a.current.VideoID != "b" || !tt.HasText("Track b") {
 		t.Fatalf("Next did not move on: current %q, shown %q", a.current.VideoID, tt.Texts())
+	}
+}
+
+func TestLinuxTrayMenuOpensMeiro(t *testing.T) {
+	opened := false
+	menu := linuxTrayMenu(func() { opened = true })
+	items := menu.Items()
+	if len(items) != 3 || items[0].Label != "Open Meiro" || items[0].Click == nil ||
+		items[1].Type != mygo.MenuItemSeparator || items[2].Role != mygo.RoleQuit {
+		t.Fatalf("tray menu = %#v, want Open Meiro, separator, and Quit", items)
+	}
+	items[0].Click(items[0], nil)
+	if !opened {
+		t.Fatal("choosing Open Meiro did not restore the main window")
 	}
 }
 
