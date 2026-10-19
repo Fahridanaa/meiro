@@ -10,6 +10,8 @@ and this project adheres to
 
 ### Changed
 
+- **The player bar keeps its mute button in narrow windows.** Hover it to
+  reveal a vertical volume slider without taking space from the track.
 - **The Linux tray menu now offers Open Meiro and Quit.** AppIndicator does
   not report icon position, so Meiro does not offer its custom tray mini
   player on Linux; Open Meiro restores the main window.

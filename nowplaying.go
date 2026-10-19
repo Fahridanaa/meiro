@@ -49,6 +49,7 @@ type nowPlayingState struct {
 	// queueFollow is the track the queue's list last scrolled to.
 	queueFollow  string
 	volumeHeld   bool
+	volumePopup  bool
 	lyrics       lyricsState
 	lyricsScroll ui.ScrollState
 	related      relatedState
@@ -322,8 +323,8 @@ func (a *app) scrubber(c *ui.Context) {
 	})
 }
 
-// volumeControl is the speaker button, which mutes, and the slider beside it.
-func (a *app) volumeControl(c *ui.Context, sliderWidth float32) {
+// volumeIcon is the speaker shape for the current volume.
+func (a *app) volumeIcon() *ui.SVG {
 	icon := m3.IconVolumeUp
 	switch {
 	case a.volume == 0:
@@ -331,31 +332,78 @@ func (a *app) volumeControl(c *ui.Context, sliderWidth float32) {
 	case a.volume < 45:
 		icon = m3.IconVolumeDown
 	}
+	return icon
+}
+
+// muteButton is the speaker button, which mutes or restores the volume.
+func (a *app) muteButton(c *ui.Context) ui.Element {
+	button := m3.IconButton(c, m3.IconButtonSpec{Icon: a.volumeIcon(), Label: "Mute", Key: "mute"})
+	if button.Clicked() {
+		a.toggleMute()
+	}
+	return button
+}
+
+// volumeSlider is the volume setting, horizontal in the player bar and
+// vertical in the narrow bar's hover panel.
+func (a *app) volumeSlider(c *ui.Context, vertical bool) ui.Element {
+	v := a.volume
+	slider := m3.Slider(c, &v, 0, 100, m3.SliderSpec{Label: "Volume", Key: "volume", Vertical: vertical})
+	if slider.Changed() {
+		a.setVolume(v)
+	}
+	// The volume is kept once the user lets go, not on every step.
+	if slider.Pressed() {
+		a.nowPlaying.volumeHeld = true
+	} else if a.nowPlaying.volumeHeld {
+		a.nowPlaying.volumeHeld = false
+		a.saveSettings()
+	}
+	return slider
+}
+
+// volumeControl is the speaker button, which mutes, and the slider beside it.
+func (a *app) volumeControl(c *ui.Context, sliderWidth float32) {
+	a.nowPlaying.volumePopup = false
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
 		a.hinted(c, func() {
-			if m3.IconButton(c, m3.IconButtonSpec{Icon: icon, Label: "Mute", Key: "mute"}).Clicked() {
-				a.toggleMute()
-			}
+			a.muteButton(c)
 		}, keymap.Mute)
 		if sliderWidth <= 0 {
 			return
 		}
 		a.hinted(c, func() {
 			ui.Row(c).Width(sliderWidth).Children(func() {
-				v := a.volume
-				slider := m3.Slider(c, &v, 0, 100, m3.SliderSpec{Label: "Volume", Key: "volume"})
-				if slider.Changed() {
-					a.setVolume(v)
-				}
-				// The volume is kept once the user lets go, not on every step.
-				if slider.Pressed() {
-					a.nowPlaying.volumeHeld = true
-				} else if a.nowPlaying.volumeHeld {
-					a.nowPlaying.volumeHeld = false
-					a.saveSettings()
-				}
+				a.volumeSlider(c, false)
 			})
 		}, keymap.VolumeUp, keymap.VolumeDown)
+	})
+}
+
+// compactVolumeControl keeps the mute button in the narrow player bar and
+// reveals an upright volume slider while the button or its panel is hovered.
+func (a *app) compactVolumeControl(c *ui.Context) {
+	sc := m3.Of(c).Scheme
+	ui.Row(c).Shrink(0).Children(func() {
+		var anchor ui.Element
+		a.hinted(c, func() { anchor = a.muteButton(c) }, keymap.Mute)
+
+		open := anchor.Hovered() || anchor.FocusVisible() || a.nowPlaying.volumePopup
+		var slider ui.Element
+		panel := ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
+			panel.Width(64).Padding(8).Radius(m3.Large).Margin(0).Background(sc.SurfaceContainerHigh)
+			m3.Elevation(c, panel, 3)
+			a.hinted(c, func() {
+				ui.Column(c).Width(48).Height(128).Center().Children(func() {
+					slider = a.volumeSlider(c, true)
+				})
+			}, keymap.VolumeUp, keymap.VolumeDown)
+		})
+		keepOpen := anchor.Hovered() || anchor.FocusVisible() || panel.Hovered() || slider.FocusVisible()
+		if next := open && keepOpen; next != a.nowPlaying.volumePopup {
+			a.nowPlaying.volumePopup = next
+			c.Invalidate()
+		}
 	})
 }
 
@@ -427,6 +475,8 @@ func (a *app) playerBar(c *ui.Context) {
 		end.Children(func() {
 			if wide {
 				a.volumeControl(c, 108)
+			} else {
+				a.compactVolumeControl(c)
 			}
 			if m3.IconButton(c, m3.IconButtonSpec{Icon: m3.IconQueue, Label: "Up next", Key: "bar-queue"}).Clicked() {
 				a.openPlayer(tabQueue, true)

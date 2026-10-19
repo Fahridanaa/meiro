@@ -11,6 +11,8 @@ A user plays a track, controls the player bar, edits the queue, and finds the sa
 - `play-fail` shows a readable reason, skips up to `maxSkips`, and retries on Play.
 - `play-autoplay` queues recommendations when the queue runs out.
 - `play-resume` restores the queue paused after a restart.
+- `play-volume` keeps the mute button visible in narrow windows and reveals
+  the vertical volume slider on hover.
 - `play-mini` shows and controls the mini player.
 - `play-real-audio` decodes real audio through ffmpeg on the null device.
 
@@ -18,6 +20,8 @@ A user plays a track, controls the player bar, edits the queue, and finds the sa
 
 - Click a track row. Click `Play` or `Shuffle` on an album, playlist or artist page.
 - Use the player bar buttons `Shuffle`, `Previous`, `Next`, `Repeat`, `Mute`, and the `Position` and `Volume` sliders.
+- In a narrow window, hover `Mute` to reveal the vertical `Volume` slider;
+  move onto the slider and drag it to adjust playback without losing the panel.
 - Click `Up next` in the player bar, or `Open the player`, to open the player panel with `Up next`, `Lyrics` and `Related`.
 - Open the tray mini player from the tray icon on macOS and Windows. On Linux, choose `Open Meiro` from the tray menu to restore the main window; Linux does not offer the tray mini player.
 - Right click a track for `Play next` and `Add to queue`.
@@ -31,6 +35,12 @@ Preconditions:
 - `a.router.Push("/album/MPREb_test")`, `tt := ui.NewTester(a.view, 1000, 700)`.
 
 - **Play.** `p.click("Album Track One", "playing")`. `r.asked("vid-3")` is true and the player bar shows the title.
+- **Narrow volume.** Set `a.current` to a seeded track, make a 920x700
+  `ui.NewTester(a.view, ...)`, and record the idle player bar. Move over
+  `Mute` and record again: `Volume` appears with a taller-than-wide bound.
+  Move onto and drag the slider, assert `a.volume` changes, then move away and
+  check the slider closes. At 1280 pixels wide, `Volume` is horizontal and
+  visible without hovering.
 - **Next.** `p.click("Next", "next")`. The seeded album has one track, so Next stays on `vid-3`. Use a longer queue to see it move, and assert `a.current.VideoID`.
 - **Queue panel.** `p.click("Up next", "bar")`, then check `a.nowPlaying.open`. The panel draws in its own view. Make a second window with `panel := newProof(t, ui.NewTester(a.nowPlayingView, 1000, 700))` and call `panel.step`. It shows `Lyrics`, `Related` and `Clear queue`. To edit, click `Remove Track b from the queue` or `Clear queue` in that window, as `TestEditingTheQueueFromItsPanel` does.
 - **Failure.** Set `r.err["bad"] = errors.New("Video unavailable")` before the click. The bar shows `This track is no longer available.` or the skip notice.
