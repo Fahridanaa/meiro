@@ -273,8 +273,9 @@ const moreTimeout = time.Minute
 
 // moreItems is the next part of a page, and the token for the part after.
 type moreItems struct {
-	items []youtube.MusicItem
-	next  string
+	items    []youtube.MusicItem
+	sections []youtube.MusicSection
+	next     string
 }
 
 // loadMore appends the next part of the page shown. A page load that begins
@@ -282,11 +283,11 @@ type moreItems struct {
 // cancel a load in flight.
 func (a *app) loadMore() {
 	s := a.pageState()
-	if s.more == "" {
+	if s.more == "" || a.pageMore.busy() {
 		return
 	}
 	r, _ := a.route()
-	token, searching := s.more, r.id == routeSearch
+	token, searching, home := s.more, r.id == routeSearch, r.id == routeHome
 	s.more, s.moreErr = "", ""
 	p := a.page
 	p.rowsDirty = true
@@ -297,23 +298,30 @@ func (a *app) loadMore() {
 			if err != nil {
 				return moreItems{}, err
 			}
-			return moreItems{result.Items, result.ContinuationToken}, nil
+			return moreItems{items: result.Items, next: result.ContinuationToken}, nil
 		}
 		result, err := client.ContinueBrowse(ctx, token)
 		if err != nil {
 			return moreItems{}, err
 		}
-		return moreItems{result.Items, result.ContinuationToken}, nil
+		return moreItems{items: result.Items, sections: result.Sections, next: result.ContinuationToken}, nil
 	}, func(more moreItems, err error) {
 		p.rowsDirty = true
 		if err != nil {
 			s.more, s.moreErr = token, err.Error()
 			return
 		}
-		if len(s.sections) > 0 {
+		if len(more.items) == 0 && len(more.sections) == 0 {
+			s.more, s.moreErr = token, "The continuation returned no content."
+			return
+		}
+		switch {
+		case home && len(more.sections) > 0:
+			s.sections = append(s.sections, more.sections...)
+		case len(s.sections) > 0:
 			last := &s.sections[len(s.sections)-1]
 			last.Items = append(last.Items, more.items...)
-		} else {
+		default:
 			s.items = append(s.items, more.items...)
 		}
 		s.more = more.next

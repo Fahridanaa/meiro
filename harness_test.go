@@ -29,12 +29,13 @@ import (
 // request's body, fakePageID records the channel a request acted as, and the
 // playlist counters count the library landings served and the playlists made.
 var (
-	searches        atomic.Int32
-	searchesMore    atomic.Int32
-	searchAsked     atomic.Value
-	fakePageID      atomic.Value
-	libraryLoads    atomic.Int32
-	playlistCreates atomic.Int32
+	searches         atomic.Int32
+	searchesMore     atomic.Int32
+	homeMoreRequests atomic.Int32
+	searchAsked      atomic.Value
+	fakePageID       atomic.Value
+	libraryLoads     atomic.Int32
+	playlistCreates  atomic.Int32
 	// likeWrites counts the like writes the fake has been asked for, and
 	// refuseWrites makes it answer them, and the library and subscription
 	// writes after them, as YouTube answers a request it rejects: with a 400.
@@ -104,6 +105,9 @@ func (fakeMusic) RoundTrip(request *http.Request) (*http.Response, error) {
 		reply = suggestionsResponse
 	case strings.Contains(asked, "FEmusic_explore"):
 		reply = exploreResponse
+	case strings.Contains(asked, `"continuation":"home-more"`):
+		homeMoreRequests.Add(1)
+		reply = homeMoreResponse
 	case strings.Contains(asked, "FEmusic_listening_review"):
 		reply = recapResponse
 	case strings.Contains(asked, "VLPL_video"):
@@ -247,6 +251,18 @@ const homeResponse = `{"contents":{"sectionListRenderer":{"contents":[
 	}}
 ]}}}`
 
+const homeMoreResponse = `{"continuationContents":{"sectionListContinuation":{"contents":[
+	{"musicCarouselShelfRenderer":{
+		"header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"runs":[{"text":"More picks"}]}}},
+		"contents":[{"musicTwoRowItemRenderer":{
+			"title":{"runs":[{"text":"More Ambient"}]},
+			"subtitle":{"runs":[{"text":"Someone"}]},
+			"thumbnailRenderer":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://img.test/c=w544-h544-l90-rj"}]}}},
+			"navigationEndpoint":{"watchEndpoint":{"videoId":"vid-4"}}
+		}}]
+	}}
+]}}}`
+
 const exploreResponse = `{"contents":{"sectionListRenderer":{"contents":[
 	{"musicCarouselShelfRenderer":{
 		"header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"runs":[{"text":"Moods"}]}}},
@@ -328,6 +344,7 @@ var fakeLibrary sync.Map
 func resetFakes() {
 	likeWrites.Store(0)
 	subscribeWrites.Store(0)
+	homeMoreRequests.Store(0)
 	refuseWrites.Store(false)
 	fakeLikeState.Store("")
 	fakeLibrary.Clear()

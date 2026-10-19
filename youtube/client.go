@@ -14,11 +14,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	defaultAPIURL        = "https://www.youtube.com"
+	defaultAPIURL        = "https://music.youtube.com"
 	defaultMusicVersion  = "1.20250219.01.00"
 	defaultWebVersion    = "2.20260623.01.00"
 	defaultMusicContext  = "WEB_REMIX"
@@ -64,6 +65,7 @@ type Client struct {
 	apiKey                  string
 	clientVersion           string
 	webClientVersion        string
+	visitorDataMu           sync.RWMutex
 	visitorData             string
 	language                string
 	country                 string
@@ -141,9 +143,26 @@ func (c *Client) context() clientContext {
 	ctx.Client.HL = c.language
 	ctx.Client.GL = c.country
 	if c.cookieAuth == nil {
-		ctx.Client.VisitorData = c.visitorData
+		ctx.Client.VisitorData = c.currentVisitorData()
 	}
 	return ctx
+}
+
+func (c *Client) currentVisitorData() string {
+	c.visitorDataMu.RLock()
+	defer c.visitorDataMu.RUnlock()
+	return c.visitorData
+}
+
+func (c *Client) rememberVisitorData(visitorData string) {
+	if visitorData == "" {
+		return
+	}
+	c.visitorDataMu.Lock()
+	if c.visitorData == "" {
+		c.visitorData = visitorData
+	}
+	c.visitorDataMu.Unlock()
 }
 
 func readBoundedBody(body io.Reader, limit int64, label string) ([]byte, error) {
@@ -178,6 +197,10 @@ func (c *Client) execute(ctx context.Context, endpoint string, payload map[strin
 }
 
 func (c *Client) executeForClient(ctx context.Context, endpoint string, payload map[string]any, client innerTubeClient) (json.RawMessage, error) {
+	return c.executeForClientWithAudioOnly(ctx, endpoint, payload, client, client == musicClient)
+}
+
+func (c *Client) executeForClientWithAudioOnly(ctx context.Context, endpoint string, payload map[string]any, client innerTubeClient, audioOnly bool) (json.RawMessage, error) {
 	var clientName, clientID, clientVersion string
 	switch client {
 	case musicClient:
@@ -194,7 +217,7 @@ func (c *Client) executeForClient(ctx context.Context, endpoint string, payload 
 		requestContext.User = &clientUserContext{OnBehalfOfUser: c.cookieAuth.onBehalfOfUser}
 	}
 	payload["context"] = requestContext
-	if client == musicClient {
+	if audioOnly {
 		payload["isAudioOnly"] = true
 	}
 	body, err := json.Marshal(payload)
@@ -229,7 +252,7 @@ func (c *Client) executeForClient(ctx context.Context, endpoint string, payload 
 	req.Header.Set("Referer", origin+"/")
 	req.Header.Set("X-YouTube-Client-Name", clientID)
 	req.Header.Set("X-YouTube-Client-Version", clientVersion)
-	c.setIdentity(req)
+	c.setIdentityWithVisitorData(req, requestContext.Client.VisitorData)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -250,15 +273,27 @@ func (c *Client) executeForClient(ctx context.Context, endpoint string, payload 
 	if !json.Valid(responseBody) {
 		return nil, fmt.Errorf("youtube: decode %s response: invalid JSON", endpoint)
 	}
+	var responseMetadata struct {
+		ResponseContext struct {
+			VisitorData string `json:"visitorData"`
+		} `json:"responseContext"`
+	}
+	if err := json.Unmarshal(responseBody, &responseMetadata); err == nil {
+		c.rememberVisitorData(responseMetadata.ResponseContext.VisitorData)
+	}
 	return json.RawMessage(responseBody), nil
 }
 
 // setIdentity adds who is asking: the visitor of an anonymous visit, or the
 // signed-in account.
 func (c *Client) setIdentity(req *http.Request) {
+	c.setIdentityWithVisitorData(req, c.currentVisitorData())
+}
+
+func (c *Client) setIdentityWithVisitorData(req *http.Request, visitorData string) {
 	// The visitor ID is an anonymous visit's; a signed-in session is its own.
-	if c.visitorData != "" && c.cookieAuth == nil {
-		req.Header.Set("X-Goog-Visitor-Id", c.visitorData)
+	if visitorData != "" && c.cookieAuth == nil {
+		req.Header.Set("X-Goog-Visitor-Id", visitorData)
 	}
 	if c.cookieAuth != nil {
 		req.Header.Set("Cookie", c.cookieAuth.cookie)

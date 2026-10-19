@@ -355,7 +355,7 @@ func (c *Client) ContinueBrowse(ctx context.Context, token string) (*BrowseResul
 	if strings.TrimSpace(token) == "" {
 		return nil, errors.New("youtube: browse continuation token is required")
 	}
-	raw, err := c.execute(ctx, "browse", map[string]any{"continuation": token})
+	raw, err := c.executeForClientWithAudioOnly(ctx, "browse", map[string]any{"continuation": token}, musicClient, false)
 	if err != nil {
 		return nil, err
 	}

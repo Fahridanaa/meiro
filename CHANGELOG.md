@@ -19,6 +19,9 @@ and this project adheres to
 ### Fixed
 
 - **Linux packages install the AppIndicator runtime needed to show the tray icon.**
+- **Home shelves no longer show scrollbars over their artwork.** Use the left
+  and right arrows to move through a shelf.
+- **Show more on Home now appends the next sections to the feed.**
 
 ## [0.4.1] - 2026-10-19
 

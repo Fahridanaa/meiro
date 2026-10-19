@@ -25,6 +25,7 @@ Preconditions:
 
 - **Every page.** Push each path in `TestEveryPageLoadsAndDraws` and call `p.step`. `Home` shows `Quick picks` and `Ambient One`. `/explore` shows `Moods` and `Night Drive`. `/album/MPREb_test` shows `Album Track One`.
 - **Open an item.** From `/home`, `p.click("Deep Focus", "album")`. `a.router.Path()` starts with `/album/` and `Album Track One` shows.
+- **Show more.** On Home, click `Show more`. The next sections appear below the existing feed, and the request count increases once.
 - **Go back.** Verified for album: click `Deep Focus` on `/home`, then `a.router.Back()` and `p.step("back")`. `Quick picks` shows again. For scroll position, mirror `TestGoingBackRestoresWhereAPageWasScrolled`, which uses `/settings`, `tt.Scroll(500, 300, 0, 1500)` and `a.list.Visible()`.
 - **New route.** Add the route's path to the table in `TestEveryPageLoadsAndDraws` style, push it, and show its heading in the screenshot.
 
