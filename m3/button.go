@@ -141,7 +141,14 @@ func buttonLabel(c *ui.Context, role Role, label string, emphasized bool, size f
 	if size <= 0 {
 		size = role.Size
 	}
-	return role.Style(ui.Text(c, label), emphasized).FontSize(size)
+	weight := role.Weight
+	if emphasized {
+		weight = role.Emphasis
+	}
+	width, _ := c.MeasureText(0, ui.Span{Text: label, Size: size, Weight: weight, LetterSpacing: role.Tracking})
+	// A little extra minimum width prevents small differences between a
+	// platform's measured and rendered glyph widths from adding an ellipsis.
+	return role.Style(ui.Text(c, label), emphasized).FontSize(size).MinWidth(width + 4)
 }
 
 // Button builds a button: its label and icon sit in a container whose shape,

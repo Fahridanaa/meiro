@@ -1196,3 +1196,54 @@ func TestOtherSkipsHaveNoLearnMore(t *testing.T) {
 		t.Errorf("unrelated skip offers Learn more: %q", tt.Texts())
 	}
 }
+
+func TestNarrowPlayerBarRevealsVerticalVolumeSliderOnHover(t *testing.T) {
+	a, _ := playbackApp(t)
+	a.current = tracks("a")[0]
+	tt := ui.NewTester(a.view, 920, 700)
+	tt.Frame()
+	if _, ok := tt.Find("Mute"); !ok {
+		t.Fatalf("the narrow player bar hides its mute button: %q", tt.Texts())
+	}
+	if _, ok := tt.Find("Volume"); ok {
+		t.Fatalf("the volume slider takes space before the button is hovered: %q", tt.Texts())
+	}
+
+	mute, _ := tt.Find("Mute")
+	tt.Move(mute.X+mute.W/2, mute.Y+mute.H/2)
+	volume, ok := tt.Find("Volume")
+	if !ok {
+		t.Fatalf("hovering Mute does not reveal the volume slider: %q", tt.Texts())
+	}
+	if volume.H <= volume.W {
+		t.Fatalf("the narrow volume slider is not vertical: %+v", volume)
+	}
+
+	tt.Move(volume.X+volume.W/2, volume.Y+volume.H/2)
+	if _, ok := tt.Find("Volume"); !ok {
+		t.Fatal("moving onto the slider closes its hover panel")
+	}
+	tt.ClickAt(volume.X+volume.W/2, volume.Y+8)
+	if a.volume < 95 {
+		t.Fatalf("dragging the vertical slider up did not raise volume: %v", a.volume)
+	}
+
+	tt.Move(24, 24)
+	if _, ok := tt.Find("Volume"); ok {
+		t.Fatal("moving away from the volume control leaves its slider open")
+	}
+}
+
+func TestWidePlayerBarKeepsHorizontalVolumeSlider(t *testing.T) {
+	a, _ := playbackApp(t)
+	a.current = tracks("a")[0]
+	tt := ui.NewTester(a.view, 1280, 700)
+	tt.Frame()
+	volume, ok := tt.Find("Volume")
+	if !ok {
+		t.Fatalf("the wide player bar hides its volume slider: %q", tt.Texts())
+	}
+	if volume.W <= volume.H {
+		t.Fatalf("the wide volume slider is not horizontal: %+v", volume)
+	}
+}

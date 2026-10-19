@@ -86,6 +86,32 @@ func TestEveryPageLoadsAndDraws(t *testing.T) {
 	}
 }
 
+func TestHomeShowMoreAppendsContinuationSections(t *testing.T) {
+	resetFakes()
+	a := newTestApp(t)
+	a.router.Push("/home")
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.Frame()
+	a.page.feed.more = "home-more"
+	a.page.rowsDirty = true
+	tt.Frame()
+	if !tt.HasText("Show more") {
+		t.Fatalf("home page has no continuation control: %q", tt.Texts())
+	}
+	if err := tt.Click("Show more"); err != nil {
+		t.Fatal(err)
+	}
+	if homeMoreRequests.Load() != 1 {
+		t.Fatalf("home continuation requests = %d, want 1", homeMoreRequests.Load())
+	}
+	if got := len(a.page.feed.sections); got != 2 {
+		t.Fatalf("home sections = %d, want original and continuation sections", got)
+	}
+	if section := a.page.feed.sections[1]; section.Title != "More picks" || len(section.Items) != 1 || section.Items[0].Title != "More Ambient" {
+		t.Errorf("continuation section = %+v", section)
+	}
+}
+
 func TestSearchFlow(t *testing.T) {
 	a := newTestApp(t)
 	a.router.Push("/search")

@@ -10,6 +10,8 @@ and this project adheres to
 
 ### Changed
 
+- **The player bar keeps its mute button in narrow windows.** Hover it to
+  reveal a vertical volume slider without taking space from the track.
 - **The Linux tray menu now offers Open Meiro and Quit.** AppIndicator does
   not report icon position, so Meiro does not offer its custom tray mini
   player on Linux; Open Meiro restores the main window.
@@ -19,7 +21,13 @@ and this project adheres to
 - **Discord Rich Presence works with a Flatpak Discord.** Meiro finds the
   socket Flatpak exports, so the manual symlink workaround is no longer
   needed.
+- **Button labels stay whole when they fit.** Theme, playlist and shortcut
+  buttons no longer lose the end of a label to an ellipsis because of small
+  differences in platform font measurements.
 - **Linux packages install the AppIndicator runtime needed to show the tray icon.**
+- **Home shelves no longer show scrollbars over their artwork.** Use the left
+  and right arrows to move through a shelf.
+- **Show more on Home now appends the next sections to the feed.**
 
 ## [0.4.1] - 2026-10-19
 
