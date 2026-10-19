@@ -20,6 +20,9 @@ go_library(
 
 go_test(
     name = "discordrpc_test",
-    srcs = ["rpc_test.go"],
+    srcs = [
+        "dial_unix_test.go",
+        "rpc_test.go",
+    ],
     embed = [":discordrpc"],
 )

@@ -16,6 +16,9 @@ and this project adheres to
 
 ### Fixed
 
+- **Discord Rich Presence works with a Flatpak Discord.** Meiro finds the
+  socket Flatpak exports, so the manual symlink workaround is no longer
+  needed.
 - **Linux packages install the AppIndicator runtime needed to show the tray icon.**
 
 ## [0.4.1] - 2026-10-19
