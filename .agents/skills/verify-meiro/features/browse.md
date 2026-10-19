@@ -21,7 +21,7 @@ A user opens the pages in the rail, follows an item into an album, playlist or a
 Preconditions:
 
 - `scripts/doctor.sh` passes.
-- Start from `a := newTestApp()`, `a.router.Push("/home")`, `tt := ui.NewTester(a.view, 1000, 700)`.
+- Start from `a := newTestApp(t)`, `a.router.Push("/home")`, `tt := ui.NewTester(a.view, 1000, 700)`.
 
 - **Every page.** Push each path in `TestEveryPageLoadsAndDraws` and call `p.step`. `Home` shows `Quick picks` and `Ambient One`. `/explore` shows `Moods` and `Night Drive`. `/album/MPREb_test` shows `Album Track One`.
 - **Open an item.** From `/home`, `p.click("Deep Focus", "album")`. `a.router.Path()` starts with `/album/` and `Album Track One` shows.

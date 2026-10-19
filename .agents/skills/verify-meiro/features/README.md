@@ -5,7 +5,7 @@ This directory is the maintained source for verifying what a Meiro user can do. 
 ## Baseline preconditions
 
 - Run `scripts/doctor.sh` and require no `FAIL` line.
-- Every proof is a scratch Go test, `zz_proof_<feature>_test.go`, in the repo root. It builds the app with `newTestApp()` (or `signedInApp(t)`, or `stateApp(t, s, signedIn)`) and drives it with `ui.NewTester`. `templates/zz_proof_test.go.tmpl` has the recorder.
+- Every proof is a scratch Go test, `zz_proof_<feature>_test.go`, in the repo root. It builds the app with `newTestApp(t)` (or `signedInApp(t)`, or `stateApp(t, s, signedIn)`) and drives it with `ui.NewTester`. Copy `templates/zz_proof_test.go.tmpl`; `prove.sh` injects the shared recorder helpers.
 - YouTube is `fakeMusic` in `harness_test.go`. Artwork is `noArtwork`. Stream URLs come from `playbackApp(t)`. Nothing touches the network, the account, or the sound card.
 - A feature that needs a new canned YouTube response gets it in `harness_test.go` in the same change, so the proof and the committed tests share it.
 

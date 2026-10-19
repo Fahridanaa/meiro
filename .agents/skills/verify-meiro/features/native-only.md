@@ -14,18 +14,16 @@ These behaviors need a real window, device, account or network. The headless tes
 
 ## How to get to it (user POV)
 
-- In an Amp orb, run `scripts/native.sh start`. It needs the Desktop (`amp orb desktop ensure`) and the tools `.agents/setup` installs.
+- In an Amp orb, run `scripts/doctor.sh`; it attempts `amp orb desktop ensure` and checks the tools `.agents/setup` installs. Then run `scripts/native.sh start` and inspect the real native window. Do not treat the initial absence of a Desktop environment file as proof that native verification is unavailable.
 - On a laptop, run `bazel run //:dev` (live reload) with `ffmpeg` and `yt-dlp` on `PATH`.
 - Install a release build from `scripts/package-linux.sh` or the release workflow.
 
-## Driving it with the headless tester
+## Verification boundaries
 
-Preconditions:
-
-- `scripts/doctor.sh` reports `Desktop is up` when `scripts/native.sh` can run.
-
-- **Verified on the orb Desktop.** `native-window` (a real labwc window, fullscreen), `native-audio` (a `Meiro` stream on the Desktop's null sink with the position advancing), `native-youtube` signed out (live home, search, playlists), and `native-ytdlp` resolving a real stream. Search for a name, click a result, read the screenshot and `pactl list sink-inputs`.
-- **Not verifiable there.** Sign-in with a real account, MPRIS and macOS Now Playing, deep links on another OS, the updater, macOS and Windows rendering, a real sound card.
+- **Orb Desktop path.** `native-window` (real labwc window, fullscreen), `native-audio` (a `Meiro` stream on the Desktop null sink with position advancing), signed-out live `native-youtube`, and `native-ytdlp` resolving a real stream can be checked there. Search, click, inspect screenshots, and use `pactl list sink-inputs` for audio evidence.
+- **Known limits; report rather than rediscover.** MPRIS cannot be verified in this orb because it has no user D-Bus session. Never sign in with a real account. Brand-channel switching/identity and playback-history reporting therefore remain fake-session tests here; say that fake tests cover the code/request path but no real-account flow was exercised. Do not imply otherwise.
+- **Not verifiable on this orb.** macOS Now Playing, deep links on another OS, the updater, macOS and Windows rendering, and real sound-card output.
+- **No native screen recorder is installed.** `scripts/native.sh capture-loop [interval-seconds] [duration-seconds] [name]` is the standard timed screenshot fallback and writes timestamps alongside PNG frames. Successive `shot` captures with step notes are also fine. Do not stitch the stills into an MP4 or call it a real recording.
 
 - **What does run.** `systemmedia` has its own unit tests. `go test ./systemmedia/ ./player/ ./internal/...` exercises them without a device.
 - **Cross-build.** `bazel build --config=darwin-arm64 //...` and the other `--config` targets in `.bazelrc` type-check a platform you cannot run.

@@ -21,7 +21,7 @@ feature is off by default.
 
 Preconditions:
 
-- Use `newTestApp()` and navigate to `/settings`.
+- Use `newTestApp(t)` and navigate to `/settings`.
 - The RPC protocol test uses an in-memory local pipe. It does not need Discord, credentials or network access.
 
 - **Settings.** Enable `Discord Rich Presence`. The switch persists in `settings.json`; users do not enter an application ID.

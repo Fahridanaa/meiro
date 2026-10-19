@@ -3,6 +3,7 @@
 #
 #   native.sh start            build, start the Desktop if needed, launch Meiro on empty data
 #   native.sh shot NAME        screenshot of the whole Desktop to <out>/NAME.png
+#   native.sh capture-loop [SECONDS] [DURATION] [NAME] timed screenshot fallback
 #   native.sh click X Y        left click at Desktop pixel X,Y of the last screenshot
 #   native.sh rclick X Y       right click
 #   native.sh type TEXT        type text into the focused field
@@ -103,6 +104,31 @@ status)
 	;;
 stop)
 	if p=$(pid); then kill "$p"; rm -f "$state/pid"; echo "stopped $p"; else echo "not running"; fi
+	;;
+capture-loop)
+	desktop_env
+	interval=${1:-1}
+	duration=${2:-10}
+	name=${3:-capture-$(date +%Y%m%d-%H%M%S)}
+	if ! awk -v n="$interval" -v d="$duration" 'BEGIN { exit !(n+0>0 && d+0>0) }'; then
+		echo "interval and duration must be positive numbers" >&2
+		exit 2
+	fi
+	[[ "$name" =~ ^[A-Za-z0-9._-]+$ && "$name" != . && "$name" != .. ]] || {
+		echo "capture name may contain only letters, numbers, dot, underscore and dash" >&2
+		exit 2
+	}
+	frames="$out/$name"
+	[ ! -e "$frames" ] || { echo "capture directory already exists: $frames" >&2; exit 2; }
+	mkdir -p "$frames"
+	count=$(awk -v d="$duration" -v n="$interval" 'BEGIN { print int(d/n) + 1 }')
+	for ((i = 1; i <= count; i++)); do
+		file=$(printf '%s/%04d.png' "$frames" "$i")
+		grim "$file"
+		printf '%s\t%s\n' "$i" "$(date --iso-8601=ns)" >>"$frames/timestamps.tsv"
+		[ "$i" -eq "$count" ] || sleep "$interval"
+	done
+	echo "captured $count native screenshots in $frames (no video encoding)"
 	;;
 *)
 	sed -n 2,16p "$0" | sed 's/^# \{0,1\}//'

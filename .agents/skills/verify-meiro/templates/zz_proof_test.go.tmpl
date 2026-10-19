@@ -1,98 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"image/png"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 )
 
-// proofSteps numbers the steps of a test across all its windows, so a second
-// window (the player panel, the mini player) does not overwrite the first.
-var proofSteps = map[string]int{}
-
-// proof records every step of a scenario: a numbered screenshot of what the
-// window drew and the texts it showed, appended to steps.txt.
-type proof struct {
-	t   *testing.T
-	tt  *ui.Tester
-	dir string
-}
-
-func newProof(t *testing.T, tt *ui.Tester) *proof {
-	t.Helper()
-	dir := os.Getenv("PROOF_DIR")
-	if dir == "" {
-		dir = t.TempDir()
-		t.Logf("PROOF_DIR is unset, artifacts go to %s and are deleted", dir)
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return &proof{t: t, tt: tt, dir: dir}
-}
-
-// step draws a frame and saves it under the next number and the label.
-func (p *proof) step(label string) {
-	p.t.Helper()
-	p.tt.Frame()
-	proofSteps[p.t.Name()]++
-	name := fmt.Sprintf("%02d-%s", proofSteps[p.t.Name()], strings.ReplaceAll(label, " ", "-"))
-	f, err := os.Create(filepath.Join(p.dir, name+".png"))
-	if err != nil {
-		p.t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, p.tt.Image()); err != nil {
-		p.t.Fatal(err)
-	}
-	log, err := os.OpenFile(filepath.Join(p.dir, "steps.txt"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		p.t.Fatal(err)
-	}
-	defer log.Close()
-	fmt.Fprintf(log, "%s\t%s\t%q\n", p.t.Name(), name, p.tt.Texts())
-}
-
-// openMenu hovers the row, which reveals its menu button, and opens the menu.
-func (p *proof) openMenu(title, label string) {
-	p.t.Helper()
-	row, ok := p.tt.Find(title)
-	if !ok {
-		p.t.Fatalf("no row %q: %q", title, p.tt.Texts())
-	}
-	p.tt.Move(row.X+row.W/2, row.Y+row.H/2)
-	p.tt.Frame()
-	p.click("More options for "+title, label)
-}
-
-// click clicks the element with the text, then records the result.
-func (p *proof) click(text, label string) {
-	p.t.Helper()
-	if err := p.tt.Click(text); err != nil {
-		p.t.Fatalf("click %q: %v", text, err)
-	}
-	p.step(label)
-}
-
-// shows fails the test unless the window shows every text.
-func (p *proof) shows(texts ...string) {
-	p.t.Helper()
-	for _, text := range texts {
-		if !p.tt.HasText(text) {
-			p.t.Errorf("missing %q in %q", text, p.tt.Texts())
-		}
-	}
-}
-
-// TestProofExample is a scenario to replace. It searches from the bar and
-// opens the results, the way TestSearchFlow does, with a screenshot per step.
-func TestProofExample(t *testing.T) {
-	a := newTestApp()
+// Replace this scenario with the user flow being proved. prove.sh supplies
+// the shared recorder helpers and the repository's test harness.
+func TestProofFeature(t *testing.T) {
+	a := newTestApp(t)
 	a.router.Push("/search")
 	tt := ui.NewTester(a.view, 1000, 700)
 	p := newProof(t, tt)
@@ -102,10 +19,4 @@ func TestProofExample(t *testing.T) {
 	tt.Type("yor")
 	p.step("suggestions")
 	p.shows("Yorushika songs")
-
-	p.click("Yorushika songs", "results")
-	p.shows("Search Result Song")
-	if len(a.settings.Recent) == 0 || a.settings.Recent[0] != "Yorushika songs" {
-		t.Errorf("the search was not remembered: %v", a.settings.Recent)
-	}
 }

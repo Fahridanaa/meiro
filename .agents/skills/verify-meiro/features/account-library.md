@@ -24,7 +24,7 @@ A user signs in, sees their library, likes tracks, subscribes to artists, saves 
 
 Preconditions:
 
-- Use `signedInApp(t)`. For sign-in flows start from `newTestApp()`.
+- Use `signedInApp(t)`. For the fake-session sign-in flow start from `newTestApp(t)`; real account sign-in is prohibited in the orb and stays unverified.
 - Call `resetFakes()` first. It zeroes the like, subscribe and refuse counters and resets the fake library. Also `libraryLoads.Store(0)` and `playlistCreates.Store(0)` when you assert on them.
 
 - **Save.** On `/album/MPREb_test`, `p.click("Save to library", "saved")`. The button reads `Remove from library`. Verified: `written().endpoint` ends in `/like/like`, because saving an album is a like write.

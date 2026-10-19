@@ -21,10 +21,10 @@ A user changes the theme and equaliser, rebinds shortcuts, clears history, opens
 
 Preconditions:
 
-- `a := newTestApp()`, `a.saver.Path = filepath.Join(t.TempDir(), "settings.json")`, `a.router.Push("/settings")`, a window of 1000x900.
+- `a := newTestApp(t)`, `a.saver.Path = filepath.Join(t.TempDir(), "settings.json")`, `a.router.Push("/settings")`, a window of 1000x900.
 
 - **Theme.** Verified. `p.click("Dark", "dark")`, `p.click("Rose", "rose")`. Then `a.saver.Save(&a.settings)`, `a.saver.Wait()` and read the file. Mirror `TestSettingsPersistAcrossRestarts`.
-- **Restart.** Build a second `newTestApp()` and `settings.Load(path)`. The mode and seed came back.
+- **Restart.** Build a second `newTestApp(t)` and `settings.Load(path)`. The mode and seed came back.
 - **Shortcut.** Mirror `TestRecordingANewShortcut`. Press the key with `tt.Key(mods, key)`, never by calling the action.
 - **History.** `p.click("Clear history", "confirm")`, `p.click("Delete all plays", "cleared")`. `a.history` is empty and the file on disk is too.
 - **Last.fm.** Mirror `TestConnectingPausingAndDisconnectingInSettings`. Set `MEIRO_LASTFM_API_KEY` and `MEIRO_LASTFM_SECRET` in the test environment only when the test needs a key, with a fake Last.fm transport.
