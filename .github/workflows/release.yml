@@ -341,13 +341,36 @@ jobs:
               suffix=""
               if [ "${{ matrix.variant }}" = minimal ]; then suffix=-minimal; fi
               cp "$installer" "artifacts/Meiro-${VERSION}-windows-${arch}${suffix}-setup.exe"
+              if [ "${{ matrix.variant }}" = full ]; then
+                python3 - "dist/${{ matrix.platform }}" "artifacts/Meiro-${VERSION}-windows-${arch}-portable.zip" <<'PY'
+          from pathlib import Path
+          import sys
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          source = Path(sys.argv[1])
+          output = Path(sys.argv[2])
+          with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+              for path in sorted(source.rglob("*")):
+                  if path.is_dir():
+                      continue
+                  relative = path.relative_to(source)
+                  if relative.parent == Path(".") and (
+                      (relative.name.startswith("update-") and path.suffix == ".json")
+                      or path.suffix == ".delta"
+                      or path.name.endswith(".tar.gz")
+                      or (" Setup " in relative.name and path.suffix == ".exe")
+                  ):
+                      continue
+                  archive.write(path, Path("Meiro") / relative)
+          PY
+              fi
               ;;
             linux-*)
               scripts/package-linux.sh "${{ matrix.platform }}" "$VERSION" artifacts "${{ matrix.variant }}"
               ;;
           esac
           # The signed update archive, deltas and manifest. The full
-          # build's go with its installers; the minimal build's have the
+          # build's go with its downloads; the minimal build's have the
           # same names, so they stay apart for the release of their own.
           # The archive keeps its name, which the manifest points at.
           updates=artifacts
@@ -410,7 +433,7 @@ jobs:
             echo "## Downloads"
             echo
             echo "- **macOS**: the universal \`.dmg\` (Apple Silicon and Intel)."
-            echo "- **Windows** (\`amd64\`): the \`-setup.exe\` installer. Untested: the author has no Windows machine."
+            echo "- **Windows** (\`amd64\`): the \`-portable.zip\` (extract and run \`Meiro.exe\`), or the \`-setup.exe\` installer. Untested: the author has no Windows machine."
             echo "- **Linux** (\`amd64\`, \`arm64\`): \`.deb\`, \`.rpm\`, \`.AppImage\` or \`.tar.gz\`."
             echo "- Full builds bundle ffmpeg and yt-dlp; \`minimal\` builds use the ones on your system."
             echo "- Verify downloads with \`SHA256SUMS.txt\`."

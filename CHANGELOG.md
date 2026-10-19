@@ -8,6 +8,11 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **Windows has a portable download.** Extract the ZIP and run Meiro without
+  installing it.
+
 ### Changed
 
 - **The player bar keeps its mute button in narrow windows.** Hover it to

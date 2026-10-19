@@ -165,10 +165,12 @@ The release page lists many files. You need only one. Follow these steps.
 | You have | Download the file that ends in |
 | --- | --- |
 | A Mac (any Mac) | `.dmg` |
-| Windows | `-setup.exe` |
+| Windows, no installer | `-portable.zip` |
 | Ubuntu, Debian, Linux Mint, Pop!_OS | `.deb` |
 | Fedora | `.rpm` |
 | Arch, Manjaro, or any other Linux | `.AppImage` |
+
+On Windows, you can also choose the `-setup.exe` installer instead.
 
 On Arch there is no native package yet. The `.AppImage` is a single file that
 runs without an install: make it executable, then open it.
@@ -179,8 +181,8 @@ Choose `arm64` only if your computer has an ARM chip. To check, open a terminal 
 - It prints `x86_64`: choose the file with `amd64` in its name.
 - It prints `aarch64`: choose the file with `arm64` in its name.
 
-Macs and Windows need no choice. One `.dmg` works on Apple Silicon and on
-Intel, and there is one Windows file.
+Macs and Windows need no chip choice. One `.dmg` works on Apple Silicon and on
+Intel. Windows downloads are for `amd64`.
 
 **Step 3. Ignore the word "minimal".** Files with `-minimal` in the name are
 for advanced users. They need extra programs (`ffmpeg`, `yt-dlp`, and Node.js
@@ -191,8 +193,9 @@ If you do use a minimal build, keep `yt-dlp` up to date (for example
 `yt-dlp -U`, or your package manager's latest). An old `yt-dlp` can cause slow
 or failed playback.
 
-Do not download the files named `update-*.json` or ending in `.delta`. Meiro
-uses those to update itself.
+Do not download files named `update-*.json`, ending in `.delta`, or the
+Windows update `.tar.gz` archive. Meiro uses those to update itself. The Linux
+`.tar.gz` package is a download for Linux users.
 
 For example, on Ubuntu with a normal Intel or AMD computer, download
 `Meiro-<version>-linux-amd64.deb`.
@@ -212,9 +215,12 @@ install `libayatana-appindicator-gtk3`. If you use an AppImage or `.tar.gz`,
 install the matching package yourself. Other distributions may use a different
 package name.
 
-**Windows**: run the `-setup.exe` installer. **Windows support is untested.**
-I don't have Windows to test it, but it's there if you want it. Feel free to
-open any issues though.
+**Windows portable version**: extract the `-portable.zip` file, keeping the
+files together, then open `Meiro.exe` in the extracted `Meiro` folder. It does
+not need an installer or administrator permission. Settings and other user
+data stay in your Windows user profile. You can also run the `-setup.exe`
+installer if you prefer. **Windows support is untested.** I don't have Windows
+to test it, but it's there if you want it. Feel free to open any issues.
 
 ## Signing in
 
@@ -410,7 +416,8 @@ platforms are `darwin-universal`, `darwin-arm64`, `darwin-amd64`,
 The minimal build expects `ffmpeg`, `yt-dlp`, and either Node.js or Bun on
 `PATH`. It does not bundle any of these tools or a JavaScript runtime.
 
-Releases include full and minimal builds: one universal DMG for macOS, plus
+Releases include full and minimal builds: one universal DMG for macOS, a
+Windows `amd64` installer for each build and a full-build portable ZIP, plus
 Linux `amd64` and `arm64` `.deb`, `.rpm`, `.AppImage`, and `.tar.gz`
 downloads. Minimal downloads include `-minimal` in the filename. See
 [`.github/workflows/release.yml`](.github/workflows/release.yml).
