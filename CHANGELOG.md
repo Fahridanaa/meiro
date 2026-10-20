@@ -14,6 +14,11 @@ and this project adheres to
   the menu on a playlist page, offers **Delete playlist**. It asks first, and
   names the playlist it would take, because a delete cannot be undone.
 
+### Changed
+
+- **Discord names every artist of a track.** A collaboration shows all of its
+  artists, as Spotify does, instead of only the first.
+
 ### Fixed
 
 - **Auto-play does not queue music-video recommendations.** It prefers the

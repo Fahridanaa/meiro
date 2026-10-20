@@ -510,10 +510,15 @@ func (a *app) syncDiscordPresence() {
 // discordPresenceState selects the fields from the current track that belong
 // in Discord's compact activity, rather than forwarding its display subtitle.
 func discordPresenceState(item youtube.MusicItem, position, total time.Duration, seekVersion uint64) discordrpc.State {
+	artist := item.Artists
+	if artist == "" {
+		// A queue saved before the item named every artist has only the first.
+		artist = item.Artist
+	}
 	return discordrpc.State{
 		VideoID:     item.VideoID,
 		Title:       item.Title,
-		Artist:      item.Artist,
+		Artist:      artist,
 		ArtworkURL:  item.Thumbnail,
 		Position:    position,
 		Duration:    total,
