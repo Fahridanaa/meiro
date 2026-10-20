@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-20
+
 ### Added
 
 - **Windows has a portable download.** Extract the ZIP and run Meiro without
