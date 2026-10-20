@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **A playlist can be deleted from its menu.** The menu on a playlist card, and
+  the menu on a playlist page, offers **Delete playlist**. It asks first, and
+  names the playlist it would take, because a delete cannot be undone.
+
 ### Fixed
 
 - **Auto-play does not queue music-video recommendations.** It prefers the
