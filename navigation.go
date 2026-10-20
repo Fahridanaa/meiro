@@ -27,6 +27,8 @@ type detail struct {
 	title    string
 	subtitle string
 	art      string
+	// description is what a podcast show says of itself.
+	description string
 }
 
 // pageState is what a page has loaded, whichever page it is.
@@ -300,6 +302,9 @@ func (a *app) applyPage(p *pageData, r *route, path string, client *youtube.Clie
 		if result.Thumbnail != "" {
 			p.detail.art = result.Thumbnail
 		}
+		if result.Description != "" {
+			p.detail.description = result.Description
+		}
 		a.details.Put(path, p.detail)
 		if result.Library.ID != "" {
 			p.library = result.Library
@@ -360,7 +365,7 @@ func (a *app) loadMore() {
 	if token == "" || a.pageMore.busy() {
 		return
 	}
-	searching, home := r.id == routeSearch, r.id == routeHome
+	searching, home, podcast := r.id == routeSearch, r.id == routeHome, r.id == routePodcast
 	s.more, s.moreErr = "", ""
 	if suggestions {
 		s.similarMore = ""
@@ -376,7 +381,11 @@ func (a *app) loadMore() {
 			}
 			return moreItems{items: result.Items, next: result.ContinuationToken}, nil
 		}
-		result, err := client.ContinueBrowse(ctx, token)
+		continueBrowse := client.ContinueBrowse
+		if podcast {
+			continueBrowse = client.ContinuePodcast
+		}
+		result, err := continueBrowse(ctx, token)
 		if err != nil {
 			return moreItems{}, err
 		}
@@ -468,7 +477,7 @@ func (a *app) activateAt(item youtube.MusicItem, tracks []youtube.MusicItem, ind
 		index = max(index, 0)
 		options, source := a.queueContext(index)
 		a.playFrom(item, tracks, index, options, source)
-	case youtube.TargetAlbum, youtube.TargetPlaylist, youtube.TargetArtist:
+	case youtube.TargetAlbum, youtube.TargetPlaylist, youtube.TargetArtist, youtube.TargetPodcast:
 		a.openTarget(target, detail{title: item.Title, subtitle: item.Subtitle, art: item.Thumbnail})
 	case youtube.TargetNone:
 	}

@@ -80,6 +80,7 @@ func (q *queue) restore(s playstate.State) {
 func (a *app) restorePlayback(path string) {
 	a.playSave.writer.Path = path
 	s := playstate.Load(path)
+	a.episodes = s.Episodes
 	if s.Empty() {
 		return
 	}
@@ -125,5 +126,44 @@ func (a *app) savePlayback(step time.Duration) {
 		return
 	}
 	s.last, s.lastAt, s.saved = mark, position, true
-	s.writer.Save(a.queue.state(position))
+	state := a.queue.state(position)
+	state.Episodes = a.episodes
+	s.writer.Save(state)
+}
+
+// episodeStartGuard is how far into an episode listening must come for the
+// place to be kept: one barely begun starts over.
+const episodeStartGuard = 30 * time.Second
+
+// episodeEndGuard is how near its end an episode counts as heard: one left
+// there starts over too, rather than with its closing seconds.
+const episodeEndGuard = time.Minute
+
+// leaveEpisode keeps where listening stopped in the current track, when it is
+// a podcast episode left part-way through. It runs as the track is left.
+func (a *app) leaveEpisode() {
+	item := a.current
+	if !item.IsEpisode() {
+		return
+	}
+	position := a.playbackPosition()
+	a.takeEpisode(item.VideoID)
+	if position < episodeStartGuard || (a.total > 0 && position > a.total-episodeEndGuard) {
+		return
+	}
+	a.episodes = slices.Insert(a.episodes, 0, playstate.Episode{VideoID: item.VideoID, Position: position})
+	a.episodes = a.episodes[:min(len(a.episodes), playstate.MaxEpisodes)]
+}
+
+// takeEpisode returns where listening to an episode stopped, or 0, and
+// forgets it: from here the episode is the current track, whose place the
+// saved queue keeps.
+func (a *app) takeEpisode(videoID string) time.Duration {
+	i := slices.IndexFunc(a.episodes, func(e playstate.Episode) bool { return e.VideoID == videoID })
+	if i < 0 {
+		return 0
+	}
+	position := a.episodes[i].Position
+	a.episodes = slices.Delete(a.episodes, i, i+1)
+	return position
 }

@@ -45,6 +45,13 @@ const searchPageResponse = `{"contents":{"tabbedSearchResultsRenderer":{"tabs":[
 			{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Someone"},{"text":" • "},{"text":"24 tracks"}]}}}
 		]}}]}},
 	{"itemSectionRenderer":{"contents":[{"musicResponsiveListItemRenderer":{
+		"navigationEndpoint":{"browseEndpoint":{"browseId":"MPSPPLambient","browseEndpointContextSupportedConfigs":{"browseEndpointContextMusicConfig":{"pageType":"MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE"}}}},
+		"overlay":{"musicItemThumbnailOverlayRenderer":{"content":{"musicPlayButtonRenderer":{"playNavigationEndpoint":{"watchPlaylistEndpoint":{"playlistId":"PLambient"}}}}}},
+		"flexColumns":[
+			{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Ambient Talk"}]}}},
+			{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Podcast"},{"text":" • "},{"text":"Someone","navigationEndpoint":{"browseEndpoint":{"browseId":"UCsomeone"}}}]}}}
+		]}}]}},
+	{"itemSectionRenderer":{"contents":[{"musicResponsiveListItemRenderer":{
 		"playlistItemData":{"videoId":"vid-1"},
 		"navigationEndpoint":{"watchEndpoint":{"videoId":"vid-1"}},
 		"flexColumns":[
@@ -78,7 +85,7 @@ func searchServer(t *testing.T, body string, asked *map[string]any) *Client {
 	return NewClient(Options{BaseURL: server.URL, APIKey: "k"})
 }
 
-// A search row opens what it names: an album or a playlist keeps its own page
+// A search row opens what it names: an album, a playlist or a podcast keeps its own page
 // although the row credits the artist beside it, and a song still plays and
 // still knows its artist.
 func TestSearchRowsOpenWhatTheyName(t *testing.T) {
@@ -93,6 +100,7 @@ func TestSearchRowsOpenWhatTheyName(t *testing.T) {
 	}{
 		{"Ambient Works", TargetAlbum, "MPREb_ambient"},
 		{"Ambient Mix", TargetPlaylist, "VLPLambient"},
+		{"Ambient Talk", TargetPodcast, "MPSPPLambient"},
 		{"First Light", TargetTrack, "vid-1"},
 	}
 	for _, item := range want {
@@ -106,6 +114,90 @@ func TestSearchRowsOpenWhatTheyName(t *testing.T) {
 	}
 	if subtitle := searchItem(t, result, "Ambient Works").Subtitle; subtitle != "Album • Someone • 2019" {
 		t.Errorf("the album row reads %q", subtitle)
+	}
+}
+
+// podcastShowResponse is a podcast show's page as YouTube Music answers one:
+// the heading sits among the contents, the filter chips' reload token comes
+// before the shelf, and each episode is a multi-row item that keeps its length
+// beside its progress. The continuation answer goes on with the same shelf.
+const podcastShowResponse = `{"contents":{"twoColumnBrowseResultsRenderer":{
+	"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicResponsiveHeaderRenderer":{
+		"title":{"runs":[{"text":"Ambient Talk"}]},
+		"description":{"musicDescriptionShelfRenderer":{"header":{"runs":[{"text":"Ambient Talk"}]},"description":{"runs":[{"text":"Quiet music,\n\nquietly "},{"text":"discussed","navigationEndpoint":{"urlEndpoint":{"url":"https://example.test"}}}]}}},
+		"thumbnail":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://img.test/show-small"},{"url":"https://img.test/show"}]}}}
+	}}]}}}}],
+	"secondaryContents":{"sectionListRenderer":{
+		"header":{"chipCloudRenderer":{"chips":[{"chipCloudChipRenderer":{"navigationEndpoint":{"browseSectionListReloadEndpoint":{"continuation":{"reloadContinuationData":{"continuation":"show-reload"}}}}}}]}},
+		"contents":[{"musicShelfRenderer":{
+			"contents":[
+				{"musicMultiRowListItemRenderer":{
+					"title":{"runs":[{"text":"Episode Two","navigationEndpoint":{"browseEndpoint":{"browseId":"MPEDep-2"}}}]},
+					"subtitle":{"runs":[{"text":"1.2K views"},{"text":" • "},{"text":"May 13"}]},
+					"description":{"runs":[{"text":"Rain on a tin roof,\n\nand then "},{"text":"https://example.test","navigationEndpoint":{"urlEndpoint":{"url":"https://example.test"}}}]},
+					"onTap":{"watchEndpoint":{"videoId":"ep-2","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}},
+					"playbackProgress":{"musicPlaybackProgressRenderer":{"playbackProgressPercentage":0,"durationText":{"runs":[{"text":" • "},{"text":"1 hr 30 min"}]}}}
+				}},
+				{"musicMultiRowListItemRenderer":{
+					"title":{"runs":[{"text":"Episode One"}]},
+					"subtitle":{"runs":[{"text":"May 6"}]},
+					"onTap":{"watchEndpoint":{"videoId":"ep-1","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}},
+					"playbackProgress":{"musicPlaybackProgressRenderer":{"durationText":{"runs":[{"text":" • "},{"text":"42 min"}]}}}
+				}}
+			],
+			"continuations":[{"nextContinuationData":{"continuation":"show-more"}}]
+		}}]
+	}}
+}}}`
+
+const podcastMoreResponse = `{"continuationContents":{"musicShelfContinuation":{
+	"contents":[{"musicMultiRowListItemRenderer":{
+		"title":{"runs":[{"text":"Episode Zero"}]},
+		"onTap":{"watchEndpoint":{"videoId":"ep-0","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}}
+	}}],
+	"continuations":[{"nextContinuationData":{"continuation":"show-more-2"}}]
+}}}`
+
+// A podcast show lists its episodes, newest first, as tracks that play, with
+// the length beside the date and what each is about on one line. Its next
+// episodes follow from the shelf's continuation, not from the token that
+// reloads the shelf under a filter.
+func TestPodcastShowListsItsEpisodes(t *testing.T) {
+	ctx := context.Background()
+	show, err := searchServer(t, podcastShowResponse, nil).GetPodcast(ctx, "MPSPPLambient")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if show.Title != "Ambient Talk" || show.Thumbnail != "https://img.test/show" || show.Description != "Quiet music, quietly discussed" {
+		t.Errorf("the show is headed %q with %q, described as %q", show.Title, show.Thumbnail, show.Description)
+	}
+	var got []string
+	for _, item := range show.Items {
+		got = append(got, item.VideoID+" "+item.Title+" | "+item.Subtitle)
+		if target := item.Target(); target.Kind != TargetTrack || !item.IsEpisode() {
+			t.Errorf("%q opens %d and is an episode: %v", item.Title, target.Kind, item.IsEpisode())
+		}
+	}
+	want := []string{"ep-2 Episode Two | 1.2K views • May 13 • 1 hr 30 min", "ep-1 Episode One | May 6 • 42 min"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("the episodes read\n%q\nwant\n%q", got, want)
+	}
+	if got := show.Items[0].Description; got != "Rain on a tin roof, and then https://example.test" {
+		t.Errorf("episode two is described as %q, on one line", got)
+	}
+	if show.ContinuationToken != "show-more" {
+		t.Errorf("the show continues with %q, want the shelf's show-more", show.ContinuationToken)
+	}
+
+	more, err := searchServer(t, podcastMoreResponse, nil).ContinuePodcast(ctx, show.ContinuationToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(more.Items) != 1 || more.Items[0].VideoID != "ep-0" || more.ContinuationToken != "show-more-2" {
+		t.Errorf("the next episodes are %#v, continuing with %q", more.Items, more.ContinuationToken)
+	}
+	if _, err := searchServer(t, podcastShowResponse, nil).GetPodcast(ctx, "VLPLambient"); err == nil {
+		t.Error("a playlist ID was read as a show")
 	}
 }
 

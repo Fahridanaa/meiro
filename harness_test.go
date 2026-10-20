@@ -123,6 +123,8 @@ func (fakeMusic) RoundTrip(request *http.Request) (*http.Response, error) {
 		reply = playlistSongsResponse
 	case strings.Contains(asked, "MPREb_test"):
 		reply = albumPage()
+	case strings.Contains(asked, "MPSPPLshow"):
+		reply = podcastResponse
 	case strings.Contains(asked, "FEmusic_library_landing"):
 		libraryLoads.Add(1)
 		reply = libraryPage()
@@ -304,6 +306,18 @@ func albumPage() string {
 	}}
 ]}}}`
 }
+
+// podcastResponse is a podcast show: its heading among its contents, and a
+// shelf of two episodes, newest first.
+const podcastResponse = `{"contents":{"twoColumnBrowseResultsRenderer":{
+	"tabs":[{"tabRenderer":{"content":{"sectionListRenderer":{"contents":[{"musicResponsiveHeaderRenderer":{"title":{"runs":[{"text":"Slow Talk"}]},"description":{"musicDescriptionShelfRenderer":{"description":{"runs":[{"text":"Two people, talking slowly."}]}}}}}]}}}}],
+	"secondaryContents":{"sectionListRenderer":{"contents":[{"musicShelfRenderer":{"contents":[
+		{"musicMultiRowListItemRenderer":{"title":{"runs":[{"text":"Episode Two"}]},"subtitle":{"runs":[{"text":"May 13"}]},
+			"onTap":{"watchEndpoint":{"videoId":"ep-2","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}}}},
+		{"musicMultiRowListItemRenderer":{"title":{"runs":[{"text":"Episode One"}]},"subtitle":{"runs":[{"text":"May 6"}]},
+			"onTap":{"watchEndpoint":{"videoId":"ep-1","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}}}}
+	]}}]}}
+}}}`
 
 // playlistPage is a playlist the account does not own: a header with the
 // button that saves it, and its videos.

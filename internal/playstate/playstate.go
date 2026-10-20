@@ -16,6 +16,10 @@ import (
 	"github.com/elianiva/meiro/youtube"
 )
 
+// MaxEpisodes is how many part-heard podcast episodes are remembered. The
+// oldest is forgotten first.
+const MaxEpisodes = 100
+
 // MaxItems is how many tracks a saved queue holds. A longer queue is saved
 // as the window of it around the track playing.
 const MaxItems = 200
@@ -33,6 +37,15 @@ type State struct {
 	Source string `json:"source,omitempty"`
 	// Position is how far into the current track playback had come.
 	Position time.Duration `json:"position,omitempty"`
+	// Episodes are the podcast episodes left part-way through, the one left
+	// last first. They outlive the queue they were heard from.
+	Episodes []Episode `json:"episodes,omitempty"`
+}
+
+// Episode is where listening to a podcast episode stopped.
+type Episode struct {
+	VideoID  string        `json:"videoId"`
+	Position time.Duration `json:"position"`
 }
 
 // Empty reports whether the state holds no queue.
@@ -62,12 +75,19 @@ func (s State) Window() State {
 
 // sanitize drops what a file may hold that the queue cannot: tracks without
 // an ID, a place outside the queue, a play-next mark for a track that is not
-// there. It returns an empty state when the current track is gone.
+// there. It returns a state with no queue when the current track is gone; the
+// episodes stay.
 func (s State) sanitize() State {
-	if s.Index < 0 || s.Index >= len(s.Items) || s.Items[s.Index].VideoID == "" {
-		return State{}
+	var episodes []Episode
+	for _, episode := range s.Episodes {
+		if episode.VideoID != "" && episode.Position > 0 && len(episodes) < MaxEpisodes {
+			episodes = append(episodes, episode)
+		}
 	}
-	var out State
+	if s.Index < 0 || s.Index >= len(s.Items) || s.Items[s.Index].VideoID == "" {
+		return State{Episodes: episodes}
+	}
+	out := State{Episodes: episodes}
 	out.RecStart = -1
 	for i, item := range s.Items {
 		if item.VideoID == "" {
@@ -142,7 +162,7 @@ func (w *Writer) Save(s State) {
 	if w.Path == "" {
 		return
 	}
-	s.Items = slices.Clone(s.Items)
+	s.Items, s.Episodes = slices.Clone(s.Items), slices.Clone(s.Episodes)
 	w.mu.Lock()
 	w.next = &s
 	if w.running {

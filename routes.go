@@ -28,6 +28,7 @@ const (
 	routeAlbum
 	routePlaylist
 	routeArtist
+	routePodcast
 )
 
 // loader reads a page's content. partial, when the loader can use it, shows
@@ -174,6 +175,12 @@ func appRoutes() []route {
 			id: routeArtist, empty: emptyMessage{"Nothing here yet", "YouTube Music returned nothing for this artist."}, pattern: "/artist/{id}", title: "Artist", target: youtube.TargetArtist,
 			load: func(ctx context.Context, c *youtube.Client, id string, _ func(*youtube.BrowseResult)) (*youtube.BrowseResult, error) {
 				return c.GetArtist(ctx, id)
+			},
+		},
+		{
+			id: routePodcast, empty: emptyMessage{"This podcast has no episodes", "YouTube Music returned no episodes for it."}, pattern: "/podcast/{id}", title: "Podcast", target: youtube.TargetPodcast,
+			load: func(ctx context.Context, c *youtube.Client, id string, _ func(*youtube.BrowseResult)) (*youtube.BrowseResult, error) {
+				return c.GetPodcast(ctx, id)
 			},
 		},
 	}

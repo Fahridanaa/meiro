@@ -16,6 +16,8 @@ const (
 	KindPlaylist  ItemKind = "playlist"
 	KindAlbum     ItemKind = "album"
 	KindArtist    ItemKind = "artist"
+	// KindEpisode is an episode of a podcast. It plays as a track does.
+	KindEpisode ItemKind = "episode"
 )
 
 // TargetKind is what an item opens when it is chosen.
@@ -26,14 +28,16 @@ const (
 	TargetNone TargetKind = iota
 	// TargetTrack plays the item.
 	TargetTrack
-	// TargetAlbum, TargetPlaylist and TargetArtist open the item's page.
+	// TargetAlbum, TargetPlaylist, TargetArtist and TargetPodcast open the
+	// item's page.
 	TargetAlbum
 	TargetPlaylist
 	TargetArtist
+	TargetPodcast
 )
 
 // Target is what an item opens, and the ID that names it: a video ID for a
-// track, a browse ID for an album, a playlist or an artist.
+// track, a browse ID for an album, a playlist, an artist or a podcast.
 type Target struct {
 	Kind TargetKind
 	ID   string
@@ -41,7 +45,7 @@ type Target struct {
 
 // Opens reports whether the target opens a page of its own.
 func (t Target) Opens() bool {
-	return t.Kind == TargetAlbum || t.Kind == TargetPlaylist || t.Kind == TargetArtist
+	return t.Kind == TargetAlbum || t.Kind == TargetPlaylist || t.Kind == TargetArtist || t.Kind == TargetPodcast
 }
 
 // Target says what the item opens. A video ID always wins: rows name their
@@ -61,6 +65,8 @@ func (item MusicItem) Target() Target {
 		return Target{TargetAlbum, browse}
 	case list:
 		return Target{TargetPlaylist, playlist}
+	case isPodcastID(browse):
+		return Target{TargetPodcast, browse}
 	case isArtistID(browse):
 		return Target{TargetArtist, browse}
 	case item.VideoID != "":
@@ -71,6 +77,9 @@ func (item MusicItem) Target() Target {
 
 // IsTrack reports whether choosing the item plays it.
 func (item MusicItem) IsTrack() bool { return item.Target().Kind == TargetTrack }
+
+// IsEpisode reports whether the item is an episode of a podcast.
+func (item MusicItem) IsEpisode() bool { return item.Kind == KindEpisode }
 
 // IsVideo reports whether the item is a music video rather than a song.
 func (item MusicItem) IsVideo() bool { return item.Kind == KindVideo }
@@ -89,7 +98,8 @@ func WatchURL(videoID string) string {
 	return "https://music.youtube.com/watch?v=" + url.QueryEscape(videoID)
 }
 
-// BrowseURL is the public link to an album, a playlist or an artist page.
+// BrowseURL is the public link to an album, a playlist, an artist or a
+// podcast page.
 func BrowseURL(browseID string) string {
 	return "https://music.youtube.com/browse/" + url.PathEscape(browseID)
 }
@@ -97,6 +107,10 @@ func BrowseURL(browseID string) string {
 func isAlbumID(id string) bool {
 	return strings.HasPrefix(id, "MPR") || strings.Contains(id, "privately_owned_release")
 }
+
+// isPodcastID reports whether an ID names a podcast show's page. Its
+// episodes are a playlist, but the show's page is not the playlist's.
+func isPodcastID(id string) bool { return strings.HasPrefix(id, "MPSPP") }
 
 func isArtistID(id string) bool {
 	return strings.HasPrefix(id, "UC") || strings.Contains(id, "privately_owned_artist")

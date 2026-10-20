@@ -12,6 +12,7 @@ import (
 
 	"github.com/elianiva/meiro/internal/audio"
 	"github.com/elianiva/meiro/internal/lru"
+	"github.com/elianiva/meiro/internal/playstate"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -79,6 +80,9 @@ type playback struct {
 	// resumeID is the restored track that has not played yet; the first play
 	// of it starts at a.scrub, where the last run left it.
 	resumeID string
+	// episodes are where the podcast episodes left part-way through stopped,
+	// the one left last first. Playing one again starts there.
+	episodes []playstate.Episode
 }
 
 func newPlayback(streams *audio.URLs, volume float64) playback {
@@ -251,12 +255,18 @@ func (a *app) startTrack(item youtube.MusicItem, automatic bool) {
 func (a *app) enterTrack(item youtube.MusicItem, automatic bool) (time.Duration, bool) {
 	a.recoveries = 0
 	changed := a.current.VideoID != item.VideoID
+	if changed {
+		a.leaveEpisode()
+	}
 	a.current = item
 	a.total = parseDuration(item.Duration)
 	a.loudness, a.loudnessOK = 0, false
 	startAt := time.Duration(0)
-	if a.resumeID == item.VideoID {
+	switch {
+	case a.resumeID == item.VideoID:
 		startAt = time.Duration(a.scrub * float64(time.Second))
+	case item.IsEpisode():
+		startAt = a.takeEpisode(item.VideoID)
 	}
 	a.resumeID = ""
 	a.scrub, a.playErr, a.rawPlayErr = startAt.Seconds(), "", ""
@@ -1141,7 +1151,7 @@ func (a *app) withCollectionTracks(item youtube.MusicItem, key string, then func
 			return client.GetAlbum(ctx, target.ID)
 		case youtube.TargetArtist:
 			return client.GetArtist(ctx, target.ID)
-		case youtube.TargetPlaylist, youtube.TargetTrack, youtube.TargetNone:
+		case youtube.TargetPlaylist, youtube.TargetTrack, youtube.TargetPodcast, youtube.TargetNone:
 			// The guard above leaves the playlist of the kinds that are not
 			// its own.
 		}

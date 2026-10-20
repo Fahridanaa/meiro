@@ -40,6 +40,10 @@ type MusicItem struct {
 	Kind          ItemKind `json:"kind,omitempty"`
 	Duration      string   `json:"duration,omitempty"`
 	Thumbnail     string   `json:"thumbnail,omitempty"`
+	// Description is what a show's page says of an episode, on one line. It
+	// is not saved with the item: it runs long, and only the show's page
+	// shows it.
+	Description string `json:"-"`
 	// Like is whether the account has liked the track, when the page that
 	// held it said. It is not saved with the item: a like changes elsewhere.
 	Like LikeStatus `json:"-"`
@@ -87,8 +91,10 @@ type SearchSuggestions struct {
 type BrowseResult struct {
 	// Title and Thumbnail are the page's own heading, the name and picture it
 	// puts over its content, as an artist's does.
-	Title             string         `json:"title,omitempty"`
-	Thumbnail         string         `json:"thumbnail,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Thumbnail string `json:"thumbnail,omitempty"`
+	// Description is what a podcast show says of itself, on one line.
+	Description       string         `json:"description,omitempty"`
 	Items             []MusicItem    `json:"items"`
 	Sections          []MusicSection `json:"sections,omitempty"`
 	ContinuationToken string         `json:"continuationToken,omitempty"`
@@ -401,6 +407,53 @@ func (c *Client) GetPlaylist(ctx context.Context, playlistID string) (*BrowseRes
 		playlistID = "VL" + playlistID
 	}
 	return c.browse(ctx, playlistID)
+}
+
+// GetPodcast reads a podcast show's page: its episodes, newest first, in one
+// shelf. The page's continuation reads the next of them, as ContinuePodcast
+// does.
+func (c *Client) GetPodcast(ctx context.Context, showID string) (*BrowseResult, error) {
+	if !isPodcastID(showID) {
+		return nil, fmt.Errorf("youtube: invalid podcast ID %q", showID)
+	}
+	raw, err := c.execute(ctx, "browse", map[string]any{"browseId": showID})
+	if err != nil {
+		return nil, err
+	}
+	root := decodeResponse(raw)
+	result := episodePage(browseResult(root))
+	// A show puts its heading among its contents, not over them.
+	if header := findRenderer(root, "musicResponsiveHeaderRenderer"); header != nil {
+		if result.Title == "" {
+			result.Title = rendererText(header.get("title"))
+			result.Thumbnail = rendererThumbnail(header.get("thumbnail"))
+		}
+		if shelf, ok := nestedObject(header.get("description"), "musicDescriptionShelfRenderer"); ok {
+			result.Description = strings.Join(strings.Fields(rendererText(shelf.get("description"))), " ")
+		}
+	}
+	return result, nil
+}
+
+// ContinuePodcast reads the next episodes of a show from a token GetPodcast or
+// ContinuePodcast returned.
+func (c *Client) ContinuePodcast(ctx context.Context, token string) (*BrowseResult, error) {
+	result, err := c.ContinueBrowse(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return episodePage(result), nil
+}
+
+// episodePage makes the continuation of a show's episode shelf the page's
+// own. The shelf is what goes on; the token the page holds besides reloads
+// the shelf under one of its filters.
+func episodePage(result *BrowseResult) *BrowseResult {
+	result.ContinuationToken = ""
+	if len(result.Sections) > 0 {
+		result.ContinuationToken = result.Sections[len(result.Sections)-1].ContinuationToken
+	}
+	return result
 }
 
 // GetAllPlaylist loads every browse continuation available for a playlist.
@@ -1480,6 +1533,8 @@ func rendererKind(key string) (ItemKind, bool) {
 		return KindAlbum, true
 	case "gridArtistRenderer":
 		return KindArtist, true
+	case "musicMultiRowListItemRenderer":
+		return KindEpisode, true
 	default:
 		return "", false
 	}
@@ -1521,6 +1576,17 @@ func parseMusicItem(kind ItemKind, renderer *jsonObject) MusicItem {
 	if item.VideoID == "" {
 		item.VideoID = rendererVideoID(renderer)
 	}
+	if item.VideoID != "" && isEpisode(renderer) {
+		item.Kind = KindEpisode
+	}
+	if kind == KindEpisode {
+		item.Description = strings.Join(strings.Fields(rendererText(renderer.get("description"))), " ")
+	}
+	if length := episodeLength(renderer); length != "" && item.Duration == "" {
+		// An episode's length is rounded to the minute, as "1 hr 30 min",
+		// which is no clock time: it reads with the date beside it.
+		item.Subtitle = strings.TrimPrefix(item.Subtitle+" • "+length, " • ")
+	}
 	if kind == KindTrack || kind == KindVideo || item.VideoID != "" {
 		// A two-row item is a song or a video when it carries a video, as the
 		// cards of a home shelf do; one without is an album or an artist.
@@ -1555,6 +1621,27 @@ func parseMusicItem(kind ItemKind, renderer *jsonObject) MusicItem {
 		item.Thumbnail = rendererThumbnail(renderer)
 	}
 	return item
+}
+
+// isEpisode reports whether the tap that plays a renderer names a podcast
+// episode.
+func isEpisode(renderer *jsonObject) bool {
+	for _, key := range []string{"navigationEndpoint", "onTap", "overlay"} {
+		if nestedString(renderer.get(key), "musicVideoType") == "MUSIC_VIDEO_TYPE_PODCAST_EPISODE" {
+			return true
+		}
+	}
+	return false
+}
+
+// episodeLength reads the length a show's episode row keeps beside its
+// progress, as "1 hr 30 min".
+func episodeLength(renderer *jsonObject) string {
+	progress, ok := nestedObject(renderer.get("playbackProgress"), "musicPlaybackProgressRenderer")
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(rendererText(progress.get("durationText")), " • "))
 }
 
 func rendererText(value any) string {

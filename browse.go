@@ -429,6 +429,8 @@ func (a *app) cardMenu(c *ui.Context, anchor ui.Element, key string, item youtub
 			label, icon = "Open playlist", m3.IconQueue
 		case youtube.TargetArtist:
 			label, icon = "Go to artist", m3.IconPerson
+		case youtube.TargetPodcast:
+			label = "Open podcast"
 		case youtube.TargetTrack, youtube.TargetNone:
 		}
 		if label != "" && m3.MenuItem(c, label, icon).Clicked() {
@@ -502,9 +504,15 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 	height, artSize, padding, gap, iconSize := float32(rowHeight), float32(48), float32(8), float32(12), float32(24)
 	titleRole, subtitleRole := m3.BodyLarge, m3.BodyMedium
 	artPixels := 128
-	if o.compact {
+	// An episode on its show's page says what it is about under its title,
+	// as YouTube Music's does, so its row is taller and its picture larger.
+	described := o.inset && item.Description != ""
+	switch {
+	case o.compact:
 		height, artSize, padding, gap, iconSize, artPixels = 44, 32, 4, 8, 20, 96
 		titleRole, subtitleRole = m3.TitleSmall, m3.BodySmall
+	case described:
+		height, artSize, gap, artPixels = 120, 96, 16, 256
 	}
 	row := ui.Row(c.Key(key))
 	row.Height(height).Shrink(0).Padding(padding, 8).Gap(4).AlignItems(ui.Center).Radius(m3.Large)
@@ -564,6 +572,9 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 				title := m3.Text(c, titleRole, item.Title).SingleLine().TextColor(titleColour)
 				if playing {
 					title.FontWeight(600)
+				}
+				if described {
+					m3.Text(c, m3.BodyMedium, item.Description).MaxLines(2).TextColor(subColour).Padding(2, 0)
 				}
 				if item.Subtitle != "" {
 					m3.Text(c, subtitleRole, item.Subtitle).SingleLine().TextColor(subColour)
@@ -780,7 +791,9 @@ func (a *app) topResult(c *ui.Context, item youtube.MusicItem) {
 						shuffled = true
 					}
 				})
-			case youtube.TargetNone:
+			case youtube.TargetPodcast, youtube.TargetNone:
+				// A show is followed from its page, episode by episode, not
+				// played whole from its card.
 			}
 		})
 		// A menu the pointer opened points at the pointer; one the menu
@@ -850,13 +863,20 @@ func (a *app) hero(c *ui.Context) {
 			if d.subtitle != "" {
 				m3.Text(c, m3.BodyLarge, d.subtitle).MaxLines(2).TextColor(sc.OnSurfaceVariant)
 			}
+			if d.description != "" {
+				// A line of reading length, which the hero's width would
+				// otherwise stretch past.
+				m3.Text(c, m3.BodyMedium, d.description).MaxLines(3).MaxWidth(720).TextColor(sc.OnSurfaceVariant)
+			}
 			ui.Box(c).Height(10)
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				none := len(a.page.playable) == 0
 				if m3.Button(c, m3.ButtonSpec{Label: "Play", Icon: m3.IconPlay, Size: buttons, Disabled: none, Key: "hero-play"}).Clicked() {
 					a.playAll()
 				}
-				if m3.Button(c, m3.ButtonSpec{Label: "Shuffle", Icon: m3.IconShuffle, Kind: m3.Tonal, Size: buttons, Disabled: none, Key: "hero-shuffle"}).Clicked() {
+				// A show is listened to in order; shuffling its episodes is
+				// not something YouTube Music offers either.
+				if r.target != youtube.TargetPodcast && m3.Button(c, m3.ButtonSpec{Label: "Shuffle", Icon: m3.IconShuffle, Kind: m3.Tonal, Size: buttons, Disabled: none, Key: "hero-shuffle"}).Clicked() {
 					a.shufflePage()
 				}
 				a.libraryButton(c)
@@ -902,13 +922,15 @@ func (a *app) heroMenu(c *ui.Context, anchor ui.Element) {
 	r, id := a.route()
 	m3.Menu(c, anchor, &a.menu.open, 232, func() {
 		close := func() { a.menu.close() }
-		if m3.MenuItem(c, "Start radio", m3.IconShuffle).Clicked() {
-			a.startRadioPage()
-			close()
-		}
-		if m3.MenuItem(c, "Shuffle play", m3.IconShuffle).Clicked() {
-			a.shufflePage()
-			close()
+		if r.target != youtube.TargetPodcast {
+			if m3.MenuItem(c, "Start radio", m3.IconShuffle).Clicked() {
+				a.startRadioPage()
+				close()
+			}
+			if m3.MenuItem(c, "Shuffle play", m3.IconShuffle).Clicked() {
+				a.shufflePage()
+				close()
+			}
 		}
 		if id != "" && m3.MenuItem(c, "Copy link", m3.IconCopy).Clicked() {
 			c.WriteClipboard(youtube.BrowseURL(id))
@@ -1053,6 +1075,8 @@ func heroLabel(kind youtube.TargetKind) string {
 		return "Playlist"
 	case youtube.TargetArtist:
 		return "Artist"
+	case youtube.TargetPodcast:
+		return "Podcast"
 	case youtube.TargetTrack, youtube.TargetNone:
 	}
 	return ""

@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/internal/audio"
+	"github.com/elianiva/meiro/internal/playstate"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -850,6 +851,57 @@ func TestABrokenStreamResumesFromItsPosition(t *testing.T) {
 	}
 	if a.playErr != "" || a.current.VideoID != "a" {
 		t.Errorf("playErr %q, current %q", a.playErr, a.current.VideoID)
+	}
+}
+
+// A podcast show opens as a page of its episodes. An episode left part-way
+// through starts where it stopped the next time it plays, and the place is
+// saved with the queue, so it outlives the run.
+func TestAPodcastEpisodeComesBackWhereItStopped(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg is not installed")
+	}
+	tone := filepath.Join(t.TempDir(), "tone.wav")
+	if out, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=duration=120", tone).CombinedOutput(); err != nil {
+		t.Fatalf("making a tone: %v: %s", err, out)
+	}
+	a, r := playbackApp(t)
+	r.url = func(string, int) (string, error) { return tone, nil } // three minutes long, as far as the app knows
+	saved := filepath.Join(t.TempDir(), "playback.json")
+	a.playSave.writer.Path = saved
+	a.router.Push("/podcast/MPSPPLshow")
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.Frame()
+	if !tt.HasText("Slow Talk") || !tt.HasText("Episode One") || tt.HasText("Shuffle") {
+		t.Fatalf("the show page reads %q", tt.Texts())
+	}
+	playing := func(id string) func() bool {
+		return func() bool { a.poll(); return a.current.VideoID == id && a.player.Playing() }
+	}
+
+	if err := tt.Click("Episode One"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, playing("ep-1"))
+	a.player.Seek(70 * time.Second)
+	waitFor(t, func() bool { return a.player.Position() >= 70*time.Second })
+	if err := tt.Click("Episode Two"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, playing("ep-2"))
+	a.savePlayback(0)
+	a.playSave.writer.Wait()
+	if episodes := playstate.Load(saved).Episodes; len(episodes) != 1 || episodes[0].VideoID != "ep-1" || episodes[0].Position < 70*time.Second {
+		t.Errorf("the saved episodes are %v, want ep-1 at 70s or past it", episodes)
+	}
+
+	if err := tt.Click("Episode One"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, playing("ep-1"))
+	if pos := a.player.Position(); pos < 70*time.Second {
+		t.Errorf("episode one came back at %v, want where it stopped, 70s or past it", pos)
 	}
 }
 
