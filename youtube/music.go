@@ -49,13 +49,18 @@ type MusicItem struct {
 	// have none, which are nearly all of them, stay small: a page's rows copy
 	// them. Nothing changes what it points to; a change gives the item another.
 	Library *LibraryState `json:"-"`
-	// Artist is the first artist the item credits and Album the album, read
-	// from the links of its byline rather than from the flattened Subtitle,
-	// which also holds the kind, the year and the length. They are empty when
-	// the byline links none, and nothing reconstructs them from the Subtitle.
-	// They are strings, not a list, so that an item stays comparable.
+	// Artist is the first artist the item credits, which the scrobble and the
+	// lyrics search take, Album the album, and Artists every artist. They are
+	// read from the links of the byline rather than from the flattened
+	// Subtitle, which also holds the kind, the year and the length. They are
+	// empty when the byline links none, and nothing reconstructs them from the
+	// Subtitle. They are strings, not a list, so that an item stays comparable.
 	Artist string `json:"artist,omitempty"`
-	Album  string `json:"album,omitempty"`
+	// Artists is every artist the item credits, in the order its byline links
+	// them, joined as "First, Second". It is empty for an item whose byline links
+	// none. Artist is the first of them.
+	Artists string `json:"artists,omitempty"`
+	Album   string `json:"album,omitempty"`
 }
 
 // SearchResult contains the parsed music items of a search.
@@ -1267,7 +1272,7 @@ func parseMusicCardShelf(renderer *jsonObject) (MusicItem, bool) {
 		item.Subtitle = strings.TrimSuffix(item.Subtitle, " • "+duration)
 	}
 	item.BrowseID, item.VideoID = cardTarget(renderer)
-	item.Artist, item.Album = bylineCredits(renderer.get("subtitle"))
+	item.setCredits(bylineCredits(renderer.get("subtitle")))
 	if item.VideoID != "" {
 		// A card of a song plays its video, and says so.
 		item.Kind = KindVideo
@@ -1348,12 +1353,12 @@ func rendererArtistBrowseID(renderer *jsonObject) string {
 	return artistBrowseEndpoint(columns[1])
 }
 
-// rendererCredits reads the artist and the album a track's byline links: the
+// rendererCredits reads the artists and the album a track's byline links: the
 // subtitle of a two-row item, the second flex column of a list row, and the
-// bylines of a queue's panel item. Only linked runs count, so text that is
-// merely shown beside the artist, such as the kind of item or a year, is never
-// taken for a name.
-func rendererCredits(renderer *jsonObject) (artist, album string) {
+// bylines of a queue's panel item. It returns the first source that names an
+// artist. Only linked runs count, so text that is merely shown beside the
+// artist, such as the kind of item or a year, is never taken for a name.
+func rendererCredits(renderer *jsonObject) (artists []string, album string) {
 	sources := []any{renderer.get("subtitle"), renderer.get("longBylineText"), renderer.get("shortBylineText")}
 	if columns, ok := renderer.get("flexColumns").([]any); ok && len(columns) >= 2 {
 		if column, ok := columns[1].(*jsonObject); ok {
@@ -1363,19 +1368,22 @@ func rendererCredits(renderer *jsonObject) (artist, album string) {
 		}
 	}
 	for _, source := range sources {
-		if artist, album = bylineCredits(source); artist != "" {
-			return artist, album
+		found, sourceAlbum := bylineCredits(source)
+		if len(found) > 0 {
+			return found, sourceAlbum
 		}
+		album = sourceAlbum
 	}
-	return "", album
+	return nil, album
 }
 
-// bylineCredits reads the first artist and the album linked from the runs of
-// a byline.
-func bylineCredits(byline any) (artist, album string) {
+// bylineCredits reads the artists and the album linked from the runs of a
+// byline, in the order it links them. A separator run links nothing, so it is
+// not a name.
+func bylineCredits(byline any) (artists []string, album string) {
 	object, ok := byline.(*jsonObject)
 	if !ok {
-		return "", ""
+		return nil, ""
 	}
 	runs, _ := object.get("runs").([]any)
 	for _, value := range runs {
@@ -1393,13 +1401,25 @@ func bylineCredits(byline any) (artist, album string) {
 			id, _ = browse.get("browseId").(string)
 		}
 		switch {
-		case isArtistID(id) && artist == "":
-			artist = text
+		case isArtistID(id):
+			artists = append(artists, text)
 		case isAlbumID(id) && album == "":
 			album = text
 		}
 	}
-	return artist, album
+	return artists, album
+}
+
+// setCredits makes item credit the artists a byline links and the album.
+// Artist names the first of them, which the scrobble and the lyrics search
+// take, and Artists names every one, the line the presence shows.
+func (item *MusicItem) setCredits(artists []string, album string) {
+	item.Album = album
+	item.Artists = strings.Join(artists, ", ")
+	item.Artist = ""
+	if len(artists) > 0 {
+		item.Artist = artists[0]
+	}
 }
 
 // nestedObject is the object stored under name in the object value is.
@@ -1504,7 +1524,7 @@ func parseMusicItem(kind ItemKind, renderer *jsonObject) MusicItem {
 	if kind == KindTrack || kind == KindVideo || item.VideoID != "" {
 		// A two-row item is a song or a video when it carries a video, as the
 		// cards of a home shelf do; one without is an album or an artist.
-		item.Artist, item.Album = rendererCredits(renderer)
+		item.setCredits(rendererCredits(renderer))
 	}
 	item.PlaylistID, _ = renderer.get("playlistId").(string)
 	item.PlaylistSetID = nestedString(renderer.get("playlistItemData"), "playlistSetVideoId")

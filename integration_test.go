@@ -38,20 +38,38 @@ func signedInApp(t *testing.T) *app {
 	return a
 }
 
-func TestDiscordPresenceStateUsesCreditedArtist(t *testing.T) {
+func TestDiscordPresenceNamesEveryCreditedArtist(t *testing.T) {
 	item := youtube.MusicItem{
 		VideoID:   "track-1",
 		Title:     "Song",
-		Subtitle:  "Song • Artist • Album • 3:42",
+		Subtitle:  "Song • Artist, Guest • Album • 3:42",
 		Artist:    "Artist",
+		Artists:   "Artist, Guest",
 		Thumbnail: "https://i.ytimg.com/cover.jpg",
 	}
 	got := discordPresenceState(item, 42*time.Second, 222*time.Second, 3)
-	if got.VideoID != item.VideoID || got.Title != item.Title || got.Artist != item.Artist || got.ArtworkURL != item.Thumbnail {
-		t.Fatalf("Discord state = %+v, want fields from the track and its credited artist", got)
+	if got.Artist != "Artist, Guest" {
+		t.Errorf("Discord artist = %q, want every credited artist", got.Artist)
+	}
+	if got.VideoID != item.VideoID || got.Title != item.Title || got.ArtworkURL != item.Thumbnail {
+		t.Fatalf("Discord state = %+v, want fields from the track", got)
 	}
 	if got.Position != 42*time.Second || got.Duration != 222*time.Second || got.SeekVersion != 3 || !got.Playing {
 		t.Errorf("Discord playback state = %+v, want position 42s, length 3:42, seek version 3, playing", got)
+	}
+}
+
+func TestDiscordPresenceFallsBackToTheFirstArtistOfASavedQueue(t *testing.T) {
+	// A queue saved before the item named every artist has only the first.
+	item := youtube.MusicItem{
+		VideoID:  "track-2",
+		Title:    "Song",
+		Subtitle: "Song • Artist",
+		Artist:   "Artist",
+	}
+	got := discordPresenceState(item, 0, 200*time.Second, 1)
+	if got.Artist != "Artist" {
+		t.Errorf("Discord artist = %q, want the first artist of a saved queue item", got.Artist)
 	}
 }
 

@@ -15,6 +15,9 @@ func TestSearchRowCreditsArtistFromLinksNotTheSubtitle(t *testing.T) {
 	if song.Artist != "Someone" {
 		t.Errorf("Artist = %q, want Someone: the kind and the length are not names", song.Artist)
 	}
+	if song.Artists != "Someone" {
+		t.Errorf("Artists = %q, want the one linked artist", song.Artists)
+	}
 	if song.Subtitle != "Song • Someone • 3:42" && song.Subtitle != "Song • Someone" {
 		t.Errorf("the display subtitle changed: %q", song.Subtitle)
 	}
@@ -26,6 +29,8 @@ func TestPanelItemsCreditArtistAndAlbum(t *testing.T) {
 			{"text":"First","navigationEndpoint":{"browseEndpoint":{"browseId":"UCfirst"}}},
 			{"text":" & "},
 			{"text":"Second","navigationEndpoint":{"browseEndpoint":{"browseId":"UCsecond"}}},
+			{"text":" & "},
+			{"text":"Third","navigationEndpoint":{"browseEndpoint":{"browseId":"UCthird"}}},
 			{"text":" • "},
 			{"text":"The Album","navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_album"}}},
 			{"text":" • "},
@@ -38,11 +43,11 @@ func TestPanelItemsCreditArtistAndAlbum(t *testing.T) {
 	for _, item := range result.Items {
 		got[item.VideoID] = item
 	}
-	if a := got["a"]; a.Subtitle != "First & Second • The Album • 2020" {
+	if a := got["a"]; a.Subtitle != "First & Second & Third • The Album • 2020" {
 		t.Errorf("a queue track shows no byline: subtitle %q", a.Subtitle)
 	}
-	if a := got["a"]; a.Artist != "First" || a.Album != "The Album" {
-		t.Errorf("a: artist %q album %q, want the first linked artist and the album", a.Artist, a.Album)
+	if a := got["a"]; a.Artist != "First" || a.Artists != "First, Second, Third" || a.Album != "The Album" {
+		t.Errorf("a: artist %q artists %q album %q, want every linked artist in order and the album", a.Artist, a.Artists, a.Album)
 	}
 	if b := got["b"]; b.Artist != "" {
 		t.Errorf("an artist that is only text was guessed: %q", b.Artist)
@@ -65,7 +70,7 @@ func TestTwoRowSubtitleCreditsArtist(t *testing.T) {
 		}
 	}
 	album := `{"title":{"runs":[{"text":"Record"}]},"subtitle":{"runs":[{"text":"Album"},{"text":" • "},{"text":"Singer","navigationEndpoint":{"browseEndpoint":{"browseId":"UCsinger"}}}]},"navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_x"}}}`
-	if item := parseMusicItem(KindMusicItem, decodeResponse(json.RawMessage(album)).(*jsonObject)); item.Artist != "" {
-		t.Errorf("an album is not a track to scrobble: artist %q", item.Artist)
+	if item := parseMusicItem(KindMusicItem, decodeResponse(json.RawMessage(album)).(*jsonObject)); item.Artist != "" || item.Artists != "" {
+		t.Errorf("an album is not a track to scrobble: artist %q artists %q", item.Artist, item.Artists)
 	}
 }
