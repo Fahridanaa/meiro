@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetUpNextSeedsALoneTrackWithItsOwnMix(t *testing.T) {
@@ -81,11 +82,69 @@ func TestReportPlaybackPingsTheTrackingURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	q := ping.URL.Query()
-	if q.Get("docid") != "vid" || q.Get("ver") != "2" || q.Get("c") != "WEB_REMIX" || len(q.Get("cpn")) != 16 || ping.Header.Get("Cookie") == "" {
+	if q.Get("docid") != "vid" || q.Get("ver") != "2" || q.Get("c") != "WEB_REMIX" || q.Get("state") != "" || len(q.Get("cpn")) != 16 || ping.Header.Get("Cookie") == "" {
 		t.Errorf("ping %s, cookie %q", ping.URL, ping.Header.Get("Cookie"))
 	}
 	if err := NewClient(Options{}).ReportPlayback(context.Background(), "vid"); err != nil {
 		t.Errorf("signed out must do nothing: %v", err)
+	}
+}
+
+func TestEpisodePlaybackReportsIntervalsUnderItsPlaybackNonce(t *testing.T) {
+	auth, err := NewCookieAuth("SAPISID=test", CookieOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var started, heartbeat, stopped *http.Request
+	client := NewClient(Options{CookieAuth: auth, HTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		body := `{"playbackTracking":{
+			"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback?docid=ep&ei=event&vm=token&of=sig&plid=player"},
+			"videostatsWatchtimeUrl":{"baseUrl":"https://s.youtube.com/api/stats/watchtime?docid=ep&ei=event&vm=token&of=sig&plid=player"}
+		}}`
+		if r.Method == http.MethodGet {
+			switch r.URL.Path {
+			case "/api/stats/playback":
+				started = r
+			case "/api/stats/watchtime":
+				if r.URL.Query().Get("final") == "1" {
+					stopped = r
+				} else {
+					heartbeat = r
+				}
+			}
+			body = ""
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	})}})
+
+	session, err := client.BeginEpisodePlayback(context.Background(), "ep", 3*time.Minute, 29*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.ReportWatchtime(context.Background(), 3*time.Minute, 3*time.Minute+30*time.Second, 29*time.Minute, "playing", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.ReportWatchtime(context.Background(), 3*time.Minute+30*time.Second, 4*time.Minute, 29*time.Minute, "paused", true); err != nil {
+		t.Fatal(err)
+	}
+	if started == nil || heartbeat == nil || stopped == nil {
+		t.Fatalf("tracking requests: start=%v heartbeat=%v stop=%v", started, heartbeat, stopped)
+	}
+	cpn := started.URL.Query().Get("cpn")
+	if len(cpn) != 16 || started.URL.Query().Get("cmt") != "180.000" || started.URL.Query().Get("len") != "1740.000" {
+		t.Errorf("playback ping query = %v", started.URL.Query())
+	}
+	for _, request := range []*http.Request{started, heartbeat, stopped} {
+		q := request.URL.Query()
+		if q.Get("docid") != "ep" || q.Get("ei") != "event" || q.Get("vm") != "token" || q.Get("of") != "sig" || q.Get("plid") != "player" || q.Get("cpn") != cpn || request.Header.Get("Cookie") == "" {
+			t.Errorf("tracking request %s, cookie %q", request.URL, request.Header.Get("Cookie"))
+		}
+	}
+	if q := heartbeat.URL.Query(); q.Get("st") != "180.000" || q.Get("et") != "210.000" || q.Get("cmt") != "210.000" || q.Get("state") != "playing" {
+		t.Errorf("heartbeat query = %v", q)
+	}
+	if q := stopped.URL.Query(); q.Get("st") != "210.000" || q.Get("et") != "240.000" || q.Get("cmt") != "240.000" || q.Get("state") != "paused" || q.Get("final") != "1" {
+		t.Errorf("final query = %v", q)
 	}
 }
 

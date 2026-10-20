@@ -136,7 +136,7 @@ const podcastShowResponse = `{"contents":{"twoColumnBrowseResultsRenderer":{
 					"subtitle":{"runs":[{"text":"1.2K views"},{"text":" • "},{"text":"May 13"}]},
 					"description":{"runs":[{"text":"Rain on a tin roof,\n\nand then "},{"text":"https://example.test","navigationEndpoint":{"urlEndpoint":{"url":"https://example.test"}}}]},
 					"onTap":{"watchEndpoint":{"videoId":"ep-2","watchEndpointMusicSupportedConfigs":{"watchEndpointMusicConfig":{"musicVideoType":"MUSIC_VIDEO_TYPE_PODCAST_EPISODE"}}}},
-					"playbackProgress":{"musicPlaybackProgressRenderer":{"playbackProgressPercentage":0,"durationText":{"runs":[{"text":" • "},{"text":"1 hr 30 min"}]}}}
+					"playbackProgress":{"musicPlaybackProgressRenderer":{"playbackProgressPercentage":25,"durationText":{"runs":[{"text":" • "},{"text":"1 hr 30 min"}]}}}
 				}},
 				{"musicMultiRowListItemRenderer":{
 					"title":{"runs":[{"text":"Episode One"}]},
@@ -185,6 +185,9 @@ func TestPodcastShowListsItsEpisodes(t *testing.T) {
 	if got := show.Items[0].Description; got != "Rain on a tin roof, and then https://example.test" {
 		t.Errorf("episode two is described as %q, on one line", got)
 	}
+	if got := show.Items[0].ProgressPercent; got != 25 {
+		t.Errorf("episode two progress is %d%%, want 25%%", got)
+	}
 	if show.ContinuationToken != "show-more" {
 		t.Errorf("the show continues with %q, want the shelf's show-more", show.ContinuationToken)
 	}
@@ -198,6 +201,23 @@ func TestPodcastShowListsItsEpisodes(t *testing.T) {
 	}
 	if _, err := searchServer(t, podcastShowResponse, nil).GetPodcast(ctx, "VLPLambient"); err == nil {
 		t.Error("a playlist ID was read as a show")
+	}
+}
+
+func TestPodcastProgressPercentIsClamped(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		want  int
+	}{
+		{"-1", 0},
+		{"40", 40},
+		{"101", 100},
+	} {
+		raw := json.RawMessage(`{"playbackProgress":{"musicPlaybackProgressRenderer":{"playbackProgressPercentage":` + test.value + `}}}`)
+		renderer := decodeResponse(raw).(*jsonObject)
+		if got := episodeProgress(renderer); got != test.want {
+			t.Errorf("progress %s = %d, want %d", test.value, got, test.want)
+		}
 	}
 }
 

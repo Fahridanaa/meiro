@@ -10,8 +10,16 @@ and this project adheres to
 
 ### Added
 
-- **Delete playlists from their menus.** Choose **Delete playlist** from a playlist card or page. Meiro asks you to confirm and names the playlist before deleting it.
-- **Browse and play podcasts.** Open a show from search to see its description and newest episodes, with each episode's description, date and length. Episodes play like tracks, and Meiro remembers where you stopped—even after you restart the app.
+- **A playlist can be deleted from its menu.** The menu on a playlist card, and
+  the menu on a playlist page, offers **Delete playlist**. It asks first, and
+  names the playlist it would take, because a delete cannot be undone.
+- **Podcast shows open.** A show from search opens as a page with its
+  description and its episodes, newest first, each with its description, date
+  and length. An episode plays like a track, with seek, the queue and the
+  player bar. An episode you leave part-way through starts where you stopped
+  the next time you play it, also after a restart. When you are signed in,
+  Meiro also reads and updates YouTube Music's episode progress, so you can
+  continue listening on another device; a local resume position takes priority.
 
 ### Changed
 

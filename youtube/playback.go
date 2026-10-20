@@ -7,7 +7,9 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Loudness is the per-track loudness metadata returned by YouTube's web player.
@@ -70,34 +72,125 @@ func (c *Client) Loudness(ctx context.Context, videoID string) (Loudness, error)
 // plays through yt-dlp, so nothing else reports it. It needs a signed-in
 // session, and does nothing without one.
 func (c *Client) ReportPlayback(ctx context.Context, videoID string) error {
+	_, err := c.reportPlayback(ctx, videoID, 0, 0, false)
+	return err
+}
+
+// PlaybackSession is YouTube's tracking session for one authenticated
+// podcast episode. Its nonce and watch-time URL must stay together: YouTube
+// drops progress pings that do not belong to the playback ping that started
+// the session.
+type PlaybackSession struct {
+	client       *Client
+	watchtimeURL *url.URL
+	cpn          string
+	startedAt    time.Time
+}
+
+// BeginEpisodePlayback starts an authenticated tracking session for an
+// episode at position. ReportWatchtime sends intervals through this same
+// session so YouTube can update the account's episode progress.
+func (c *Client) BeginEpisodePlayback(ctx context.Context, videoID string, position, duration time.Duration) (*PlaybackSession, error) {
+	return c.reportPlayback(ctx, videoID, position, duration, true)
+}
+
+func (c *Client) reportPlayback(ctx context.Context, videoID string, position, duration time.Duration, withWatchtime bool) (*PlaybackSession, error) {
 	if c.cookieAuth == nil || strings.TrimSpace(videoID) == "" {
-		return nil
+		return nil, nil
 	}
 	raw, err := c.execute(ctx, "player", map[string]any{
 		"videoId":         videoID,
 		"playbackContext": map[string]any{"contentPlaybackContext": map[string]any{}},
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	tracking := findRenderer(decodeResponse(raw), "videostatsPlaybackUrl")
+	root := decodeResponse(raw)
+	playbackURL, err := trackingURL(root, "videostatsPlaybackUrl")
+	if err != nil {
+		return nil, err
+	}
+	var watchtimeURL *url.URL
+	if withWatchtime {
+		watchtimeURL, err = trackingURL(root, "videostatsWatchtimeUrl")
+		if err != nil {
+			return nil, err
+		}
+	}
+	cpn := clientPlaybackNonce()
+	params := url.Values{
+		"ver": {"2"},
+		"c":   {defaultMusicContext},
+		"cpn": {cpn},
+	}
+	if withWatchtime {
+		params.Set("state", "playing")
+		params.Set("cmt", seconds(position))
+		params.Set("len", seconds(duration))
+		params.Set("rt", "0")
+	}
+	if err := c.pingTracking(ctx, playbackURL, params, "playback"); err != nil {
+		return nil, err
+	}
+	if !withWatchtime {
+		return nil, nil
+	}
+	return &PlaybackSession{client: c, watchtimeURL: watchtimeURL, cpn: cpn, startedAt: time.Now()}, nil
+}
+
+// ReportWatchtime reports the newly played interval. Positions use seconds
+// from the episode's start; seeking is handled by starting a new interval at
+// the position reached, never by reporting the skipped section.
+func (s *PlaybackSession) ReportWatchtime(ctx context.Context, from, to, duration time.Duration, state string, final bool) error {
+	if s == nil || s.client == nil || s.watchtimeURL == nil {
+		return nil
+	}
+	params := url.Values{
+		"ver":   {"2"},
+		"c":     {defaultMusicContext},
+		"cpn":   {s.cpn},
+		"st":    {seconds(from)},
+		"et":    {seconds(to)},
+		"cmt":   {seconds(to)},
+		"len":   {seconds(duration)},
+		"state": {state},
+		"rt":    {seconds(time.Since(s.startedAt))},
+	}
+	if final {
+		params.Set("final", "1")
+	}
+	return s.client.pingTracking(ctx, s.watchtimeURL, params, "watchtime")
+}
+
+func trackingURL(root any, key string) (*url.URL, error) {
+	tracking := findRenderer(root, key)
 	base, _ := tracking.get("baseUrl").(string)
 	if base == "" {
-		return errors.New("youtube: player response has no playback tracking URL")
+		return nil, errors.New("youtube: player response has no " + key)
 	}
 	target, err := url.Parse(base)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	return target, nil
+}
+
+func (c *Client) pingTracking(ctx context.Context, target *url.URL, params url.Values, operation string) error {
 	if !c.allowInsecureCookieAuth && !isYouTubeURL(target) {
 		return errors.New("youtube: refusing to send cookie authentication to a non-YouTube or non-HTTPS URL")
 	}
 	query := target.Query()
-	query.Set("ver", "2")
-	query.Set("c", defaultMusicContext)
-	query.Set("cpn", clientPlaybackNonce())
-	target.RawQuery = query.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	// Keep the session's tracking parameters as YouTube returned them, while
+	// replacing the values that identify this client playback.
+	for key, values := range params {
+		query.Del(key)
+		for _, value := range values {
+			query.Add(key, value)
+		}
+	}
+	requestURL := *target
+	requestURL.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
 	if err != nil {
 		return err
 	}
@@ -110,9 +203,13 @@ func (c *Client) ReportPlayback(ctx context.Context, videoID string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return responseError("playback", resp)
+		return responseError(operation, resp)
 	}
 	return nil
+}
+
+func seconds(d time.Duration) string {
+	return strconv.FormatFloat(d.Seconds(), 'f', 3, 64)
 }
 
 // clientPlaybackNonce is the 16 characters the player sends to tell one

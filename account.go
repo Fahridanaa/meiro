@@ -273,6 +273,9 @@ func (s *accountState) renewSession(ctx context.Context, cookie string, from ses
 // and reloads the page the change of account leaves stale.
 func (a *app) useSession(s *session, from sessionSource) {
 	a.stopAccountWork()
+	if a.account.session != s {
+		a.finishEpisodeProgress(false)
+	}
 	a.account.session = s
 	a.account.expired = ""
 	a.account.signIn.err = ""
@@ -300,6 +303,7 @@ func (a *app) useSession(s *session, from sessionSource) {
 func (a *app) endSession(reason string) {
 	a.stopAccountWork()
 	had := a.account.session != nil
+	a.finishEpisodeProgress(false)
 	a.account.session = nil
 	a.account.expired = ""
 	a.account.signIn.err = reason

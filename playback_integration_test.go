@@ -905,6 +905,69 @@ func TestAPodcastEpisodeComesBackWhereItStopped(t *testing.T) {
 	}
 }
 
+// A signed-in episode can resume from YouTube's account progress when there
+// is no local position. A local position wins when both are available, and a
+// signed-out session ignores the account hint. Pausing sends a final interval.
+func TestPodcastEpisodeSyncsResumeProgressWithTheAccount(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg is not installed")
+	}
+	tone := filepath.Join(t.TempDir(), "tone.wav")
+	if out, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=duration=120", tone).CombinedOutput(); err != nil {
+		t.Fatalf("making a tone: %v: %s", err, out)
+	}
+	for _, test := range []struct {
+		name      string
+		signedIn  bool
+		local     time.Duration
+		wantStart time.Duration
+	}{
+		{name: "account progress", signedIn: true, wantStart: 45 * time.Second},
+		{name: "local position wins", signedIn: true, local: 70 * time.Second, wantStart: 70 * time.Second},
+		{name: "signed out ignores account hint", wantStart: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			a, r := playbackApp(t)
+			r.url = func(string, int) (string, error) { return tone, nil }
+			var tracking []*http.Request
+			if test.signedIn {
+				auth, err := youtube.NewCookieAuth("SAPISID=test", youtube.CookieOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				client := youtube.NewClient(youtube.Options{CookieAuth: auth, HTTPClient: &http.Client{Transport: playbackRoundTrip(func(request *http.Request) (*http.Response, error) {
+					body := `{"playbackTracking":{"videostatsPlaybackUrl":{"baseUrl":"https://s.youtube.com/api/stats/playback?docid=ep"},"videostatsWatchtimeUrl":{"baseUrl":"https://s.youtube.com/api/stats/watchtime?docid=ep"}}}`
+					if request.Method == http.MethodGet {
+						tracking = append(tracking, request)
+						body = ""
+					}
+					return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: request}, nil
+				})}})
+				a.account.session = &session{client: client}
+			}
+			item := youtube.MusicItem{VideoID: "episode", Title: "Episode", Kind: youtube.KindEpisode, ProgressPercent: 25}
+			if test.local > 0 {
+				a.episodes = []playstate.Episode{{VideoID: item.VideoID, Position: test.local}}
+			}
+			a.play(item, []youtube.MusicItem{item})
+			waitFor(t, func() bool { return a.player.Playing() })
+			if got := a.player.Position(); got < test.wantStart {
+				t.Errorf("episode started at %s, want at least %s", got, test.wantStart)
+			}
+			if test.signedIn {
+				if len(tracking) != 1 || tracking[0].URL.Path != "/api/stats/playback" {
+					t.Fatalf("episode start pings = %v, want one playback ping", tracking)
+				}
+				a.pause()
+				if len(tracking) != 2 || tracking[1].URL.Path != "/api/stats/watchtime" || tracking[1].URL.Query().Get("final") != "1" {
+					t.Errorf("pause pings = %v, want final watch-time ping", tracking)
+				}
+			}
+		})
+	}
+}
+
 // A stream that stays broken is tried a bounded number of times, then the
 // reason is shown; a resolve that fails while the network is down counts as
 // a try, and one that works afterwards ends the trouble.

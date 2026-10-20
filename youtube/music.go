@@ -44,6 +44,9 @@ type MusicItem struct {
 	// is not saved with the item: it runs long, and only the show's page
 	// shows it.
 	Description string `json:"-"`
+	// ProgressPercent is the account's reported episode progress, when the
+	// show page includes it. It is a hint for resume, not saved with the item.
+	ProgressPercent int `json:"-"`
 	// Like is whether the account has liked the track, when the page that
 	// held it said. It is not saved with the item: a like changes elsewhere.
 	Like LikeStatus `json:"-"`
@@ -1581,6 +1584,7 @@ func parseMusicItem(kind ItemKind, renderer *jsonObject) MusicItem {
 	}
 	if kind == KindEpisode {
 		item.Description = strings.Join(strings.Fields(rendererText(renderer.get("description"))), " ")
+		item.ProgressPercent = episodeProgress(renderer)
 	}
 	if length := episodeLength(renderer); length != "" && item.Duration == "" {
 		// An episode's length is rounded to the minute, as "1 hr 30 min",
@@ -1642,6 +1646,18 @@ func episodeLength(renderer *jsonObject) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.TrimPrefix(rendererText(progress.get("durationText")), " • "))
+}
+
+func episodeProgress(renderer *jsonObject) int {
+	progress, ok := nestedObject(renderer.get("playbackProgress"), "musicPlaybackProgressRenderer")
+	if !ok {
+		return 0
+	}
+	value, ok := progress.get("playbackProgressPercentage").(float64)
+	if !ok {
+		return 0
+	}
+	return min(max(int(value), 0), 100)
 }
 
 func rendererText(value any) string {

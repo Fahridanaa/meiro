@@ -83,7 +83,36 @@ type playback struct {
 	// episodes are where the podcast episodes left part-way through stopped,
 	// the one left last first. Playing one again starts there.
 	episodes []playstate.Episode
+	// episodeProgress is the authenticated YouTube watch-time session for the
+	// episode playing. It is nil while signed out or between episodes.
+	episodeProgress *episodeProgressSync
 }
+
+// episodeProgressSync owns one account progress session. It is main-thread
+// state; network requests capture its pointer and publish results through
+// app.update.
+type episodeProgressSync struct {
+	item         youtube.MusicItem
+	client       *youtube.Client
+	session      *youtube.PlaybackSession
+	duration     time.Duration
+	lastReported time.Duration
+	lastPosition time.Duration
+	lastSample   time.Time
+	pendingTo    time.Duration
+	seekVersion  uint64
+	pending      bool
+	finished     bool
+	finalSent    bool
+	finishAt     time.Duration
+}
+
+// episodeProgressInterval bounds how often the account receives a heartbeat.
+const episodeProgressInterval = 20 * time.Second
+
+// episodeProgressTimeout bounds starting a tracking session or sending a
+// watch-time interval.
+const episodeProgressTimeout = 15 * time.Second
 
 func newPlayback(streams *audio.URLs, volume float64) playback {
 	return playback{queue: newQueue(), streams: streams, volume: volume, loudnessMap: lru.New[string, youtube.Loudness](256)}
@@ -256,6 +285,7 @@ func (a *app) enterTrack(item youtube.MusicItem, automatic bool) (time.Duration,
 	a.recoveries = 0
 	changed := a.current.VideoID != item.VideoID
 	if changed {
+		a.finishEpisodeProgress(false)
 		a.leaveEpisode()
 	}
 	a.current = item
@@ -362,6 +392,7 @@ func playbackVolume(volume, loudness float64, normalize bool) float64 {
 // with yt-dlp, and plays it.
 func (a *app) streamAudio(item youtube.MusicItem, startAt time.Duration, changed bool) {
 	cache := a.currentAudioCache()
+	accountProgress := a.signedIn()
 	log.Printf("playback: resolving video_id=%s", item.VideoID)
 	a.fetchLoudness(item, &a.loudnessLoad)
 	startTask(a, &a.stream, audio.ResolveTimeout, func(ctx context.Context) (resolvedAudio, error) {
@@ -369,6 +400,9 @@ func (a *app) streamAudio(item youtube.MusicItem, startAt time.Duration, changed
 		found, err := findAudio(ctx, a.streams, item, cache)
 		if err != nil || ctx.Err() != nil {
 			return found, err
+		}
+		if accountProgress && item.IsEpisode() {
+			startAt = max(startAt, episodeProgressPosition(item, found.total))
 		}
 		// Opening the audio device and starting ffmpeg take long enough to
 		// be felt, so they happen here and not on the main thread.
@@ -392,6 +426,10 @@ func (a *app) streamAudio(item youtube.MusicItem, startAt time.Duration, changed
 		log.Printf("playback: audio started video_id=%s from_cache=%t duration=%s", item.VideoID, found.fromCache, found.total)
 		if changed {
 			a.recordHistory(item)
+		}
+		if item.IsEpisode() {
+			a.beginEpisodeProgress(item, a.player.Position(), found.total)
+		} else if changed {
 			a.reportPlayback(item)
 		}
 		a.skipped = 0
@@ -483,10 +521,18 @@ func (a *app) followed(tag string) {
 	if i >= 0 {
 		item = a.queue.moveTo(i)
 	}
-	_, changed := a.enterTrack(item, true)
+	startAt, changed := a.enterTrack(item, true)
 	a.applyLoudness()
 	if found.total > 0 {
 		a.total = found.total
+	}
+	if item.IsEpisode() {
+		if a.signedIn() {
+			startAt = max(startAt, episodeProgressPosition(item, found.total))
+		}
+		if startAt > 0 {
+			a.seek(startAt)
+		}
 	}
 	log.Printf("playback: audio followed on video_id=%s from_cache=%t duration=%s", item.VideoID, found.fromCache, found.total)
 	a.skipped = 0
@@ -496,6 +542,10 @@ func (a *app) followed(tag string) {
 	a.warmNext()
 	if changed {
 		a.recordHistory(item)
+	}
+	if item.IsEpisode() {
+		a.beginEpisodeProgress(item, startAt, found.total)
+	} else if changed {
 		a.reportPlayback(item)
 	}
 	a.afterEnter(item, changed)
@@ -638,6 +688,166 @@ func (a *app) reportPlayback(item youtube.MusicItem) {
 		defer cancel()
 		if err := client.ReportPlayback(ctx, item.VideoID); err != nil {
 			log.Printf("playback: could not report video_id=%s: %v", item.VideoID, err)
+		}
+	})
+}
+
+// episodeProgressPosition turns YouTube's percentage into a resume position
+// after audio resolution supplies the actual duration. Ignore nearly-new and
+// nearly-finished positions, as the local episode resume does.
+func episodeProgressPosition(item youtube.MusicItem, duration time.Duration) time.Duration {
+	if !item.IsEpisode() || item.ProgressPercent <= 0 || item.ProgressPercent >= 100 || duration <= 0 {
+		return 0
+	}
+	position := time.Duration(int64(duration) * int64(item.ProgressPercent) / 100)
+	if position < episodeStartGuard || duration-position < episodeEndGuard {
+		return 0
+	}
+	return position
+}
+
+// beginEpisodeProgress starts the account's tracking session without holding
+// up audio. A result for an episode that has already ended is still used to
+// send its final interval, but cannot replace the current episode's session.
+func (a *app) beginEpisodeProgress(item youtube.MusicItem, position, duration time.Duration) {
+	if !a.signedIn() || !item.IsEpisode() {
+		return
+	}
+	if a.episodeProgress != nil {
+		a.finishEpisodeProgress(false)
+	}
+	state := &episodeProgressSync{
+		item: item, client: a.client(), duration: duration, lastReported: position,
+		lastPosition: position, lastSample: time.Now(), seekVersion: a.seekVersion,
+		pending: true,
+	}
+	a.episodeProgress = state
+	a.run(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), episodeProgressTimeout)
+		defer cancel()
+		session, err := state.client.BeginEpisodePlayback(ctx, item.VideoID, position, duration)
+		a.update(func() {
+			state.pending = false
+			if err != nil {
+				log.Printf("playback: could not start episode progress video_id=%s: %v", item.VideoID, err)
+				if a.episodeProgress == state {
+					a.episodeProgress = nil
+				}
+				return
+			}
+			state.session = session
+			if state.finished {
+				a.sendEpisodeProgressFinal(state)
+				return
+			}
+			if a.episodeProgress != state {
+				return
+			}
+		})
+	})
+}
+
+// syncEpisodeProgress sends a watch-time interval after each 20 seconds of
+// actual playback. Position jumps and seeks reset its baseline, so skipped
+// audio is never attributed to the account.
+func (a *app) syncEpisodeProgress() {
+	state := a.episodeProgress
+	if state == nil || state.finished || state.session == nil || state.pending || !a.player.Playing() {
+		return
+	}
+	now, position := time.Now(), a.player.Position()
+	if state.seekVersion != a.seekVersion {
+		state.seekVersion = a.seekVersion
+		state.lastReported, state.lastPosition, state.lastSample = position, position, now
+		return
+	}
+	elapsed := now.Sub(state.lastSample)
+	advanced := position - state.lastPosition
+	state.lastPosition, state.lastSample = position, now
+	if advanced < 0 || advanced > elapsed+2*time.Second {
+		state.lastReported = position
+		return
+	}
+	if position-state.lastReported < episodeProgressInterval {
+		return
+	}
+	from, to := state.lastReported, position
+	state.pending = true
+	state.pendingTo = to
+	a.run(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), episodeProgressTimeout)
+		defer cancel()
+		err := state.session.ReportWatchtime(ctx, from, to, state.duration, "playing", false)
+		a.update(func() {
+			state.pending = false
+			state.pendingTo = 0
+			if err != nil {
+				log.Printf("playback: could not report episode progress video_id=%s: %v", state.item.VideoID, err)
+			} else {
+				state.lastReported = to
+			}
+			if state.finished {
+				a.sendEpisodeProgressFinal(state)
+			}
+		})
+	})
+}
+
+// finishEpisodeProgress closes the current interval when an episode pauses,
+// ends or is replaced. During shutdown it waits briefly so the final position
+// is not lost when the window's update loop stops.
+func (a *app) finishEpisodeProgress(wait bool) {
+	state := a.episodeProgress
+	if state == nil {
+		return
+	}
+	state.finished = true
+	state.finishAt = max(a.playbackPosition(), state.lastReported)
+	a.episodeProgress = nil
+	if state.session == nil || state.pending {
+		if !wait {
+			return
+		}
+	}
+	if state.session == nil || state.finalSent {
+		return
+	}
+	from, to := state.lastReported, state.finishAt
+	if state.pending && state.session != nil {
+		from = max(from, state.pendingTo)
+	}
+	if to < from {
+		to = from
+	}
+	if wait {
+		state.finalSent = true
+		result := make(chan error, 1)
+		a.run(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), episodeProgressTimeout)
+			defer cancel()
+			result <- state.session.ReportWatchtime(ctx, from, to, state.duration, "paused", true)
+		})
+		if err := <-result; err != nil {
+			log.Printf("playback: could not finish episode progress video_id=%s: %v", state.item.VideoID, err)
+		}
+		return
+	}
+	a.sendEpisodeProgressFinal(state)
+}
+
+// sendEpisodeProgressFinal sends the final interval once, including when the
+// session-start or heartbeat request completed after the episode was left.
+func (a *app) sendEpisodeProgressFinal(state *episodeProgressSync) {
+	if state.session == nil || state.finalSent {
+		return
+	}
+	from, to := state.lastReported, max(state.finishAt, state.lastReported)
+	state.finalSent = true
+	a.run(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), episodeProgressTimeout)
+		defer cancel()
+		if err := state.session.ReportWatchtime(ctx, from, to, state.duration, "paused", true); err != nil {
+			log.Printf("playback: could not finish episode progress video_id=%s: %v", state.item.VideoID, err)
 		}
 	})
 }
@@ -895,6 +1105,7 @@ func (a *app) poll() {
 		return
 	}
 	if a.player.Playing() {
+		a.syncEpisodeProgress()
 		if a.recoveries > 0 && a.player.Position() > a.recoveredFrom+recoveryHealthy {
 			a.recoveries = 0 // it held, so the next break gets all its tries
 		}
@@ -930,6 +1141,7 @@ func (a *app) advance() {
 		// YouTube has to follow it with, which ensureUpNext asks for when the
 		// recommendations pulled so far have been played out.
 		a.upNext.waiting = true
+		a.finishEpisodeProgress(false)
 		a.player.Stop()
 		a.syncSystemMedia()
 		a.ensureUpNext()
@@ -941,6 +1153,7 @@ func (a *app) advance() {
 // stopAtQueueEnd stops playback, and drops a track still being found.
 func (a *app) stopAtQueueEnd() {
 	a.stream.stop()
+	a.finishEpisodeProgress(false)
 	a.player.Stop()
 	a.syncSystemMedia()
 }
@@ -979,6 +1192,10 @@ func (a *app) applySeek() {
 		return at, nil
 	}, func(applied time.Duration, _ error) {
 		a.seekVersion++
+		if state := a.episodeProgress; state != nil {
+			state.lastReported, state.lastPosition, state.lastSample = applied, applied, time.Now()
+			state.seekVersion = a.seekVersion
+		}
 		a.syncSystemMedia()
 		if a.seekTarget != applied {
 			a.applySeek()
@@ -998,8 +1215,11 @@ func (a *app) togglePlay() {
 		}
 		return
 	}
-	a.player.Toggle()
-	a.syncSystemMedia()
+	if a.player.Playing() {
+		a.pause()
+	} else {
+		a.resume()
+	}
 }
 
 // resume plays a paused track, or starts the current one again when it has
@@ -1014,6 +1234,9 @@ func (a *app) resume() {
 		}
 	} else {
 		a.player.Resume()
+		if a.current.IsEpisode() {
+			a.beginEpisodeProgress(a.current, a.player.Position(), a.total)
+		}
 	}
 	a.syncSystemMedia()
 }
@@ -1021,6 +1244,7 @@ func (a *app) resume() {
 // pause holds the track where it is.
 func (a *app) pause() {
 	a.player.Pause()
+	a.finishEpisodeProgress(false)
 	a.syncSystemMedia()
 }
 
