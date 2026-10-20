@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-10-20
+
 ### Added
 
 - **A playlist can be deleted from its menu.** The menu on a playlist card, and
