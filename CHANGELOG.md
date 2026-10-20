@@ -8,6 +8,12 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auto-play does not queue music-video recommendations.** It prefers the
+  song version when both are recommended, and does not change your chosen
+  tracks or the one playing.
+
 ## [0.4.2] - 2026-10-20
 
 ### Added
