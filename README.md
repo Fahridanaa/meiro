@@ -5,16 +5,12 @@
   </picture>
 </p>
 
-A native desktop player for YouTube Music. Meiro draws its own interface in a
-native window instead of using a Chromium-based web front end. It plays only
-the audio of each song, so there are no ads, and it can send what you play to
-Last.fm.
+A lightweight desktop music player for YouTube Music. Meiro has a native
+interface rather than a browser-based one, and typically uses about 100 MB of
+memory. It plays music without loading the YouTube Music web page, and can
+scrobble your listening to Last.fm.
 
-Meiro is very lightweight. It uses about 100 MB of RAM most of the time, and
-can go as low as about 99 MB, because there is no browser engine behind the
-interface.
-
-> **Beta, and unofficial.** Meiro is an independent project. It is not made,
+> **Beta and unofficial.** Meiro is an independent project. It is not made,
 > endorsed or supported by YouTube or Google, and it uses YouTube's private web
 > interfaces, which YouTube can change at any time. When that happens, parts of
 > Meiro (browsing, search, playback, sign-in) may stop working until it is
@@ -54,13 +50,15 @@ half of the title.
   see on YouTube Music, plus artist, album and playlist pages.
 - **Search.** Look up songs, albums, artists and playlists, and filter the
   results. Your recent searches are saved.
+- **Podcasts.** Browse shows and episodes, read episode details, and pick up
+  where you left off.
 - **Song menus.** Play a song next, add it to a playlist, start a radio from
   it, go to the artist, or copy a link to share.
 
 ### Listen
 
-- **No ads.** Meiro plays the audio of the song itself, not the web page around
-  it, so no ad is ever loaded or played.
+- **No web-page ads.** Meiro plays the music directly instead of loading the
+  YouTube Music web page, so it does not show ads from that page.
 - **Everything you expect from a player.** Play, pause, skip, shuffle, repeat,
   volume, and a queue you can see and change. A small player follows you while
   you browse, and the full player shows the queue, lyrics and related songs.
@@ -70,11 +68,9 @@ half of the title.
   the music does not stop.
 - **Pick up where you left off.** Open Meiro again and your queue and song are
   waiting for you.
-- **Keeps playing when you close the window.** On macOS and Windows, the tray
-  opens a mini player for playback controls. **Linux limitation:** AppIndicator
-  does not report the tray icon's position, so MyGo would place a flyout in the
-  center of the primary display's work area instead of beside the icon. Meiro
-  skips that flyout and offers only **Open Meiro** and **Quit**.
+- **Keeps playing when you close the window.** On macOS and Windows, open the
+  mini player from the tray. On Linux, the tray menu offers **Open Meiro** and
+  **Quit**; the mini player is not available there.
 - **Works with your computer's controls.** Use your media keys, the Now Playing
   widget on Mac, or the media controls on Linux.
 - **Share what you hear on Discord.** With Discord running, enable Discord
@@ -86,11 +82,12 @@ half of the title.
 
 ### Your account and library
 
-- **Sign in with your Google account.** Get your own Home feed and Library.
+- **Sign in with your Google account.** Get your personalized Home feed and
+  Library.
   Meiro never sees your password. You can still browse and play without
   signing in.
 - **Manage your library.** Like songs, follow artists, save albums and
-  playlists, and make your own playlists.
+  playlists, and create or delete your own playlists.
 - **Organize playlists.** Sort a playlist by title, artist or length, or
   search inside it.
 
@@ -103,17 +100,17 @@ half of the title.
 
 ### Keep track of what you hear
 
-- **Last.fm scrobbling.** Connect your Last.fm account and Meiro adds the songs
-  you listen to your profile. Pause it any time.
-- **Listening stats.** See how much you listened to, day by day. The history
-  stays on your computer and you can delete it whenever you like.
+- **Last.fm scrobbling.** Connect your Last.fm account and Meiro scrobbles the
+  tracks you play to your profile. Pause scrobbling any time.
+- **Listening stats.** See your listening time by day. The history stays on
+  your computer, and you can delete it whenever you like.
 
 ### Light and simple
 
-- **Small and quick.** Meiro uses about 100 MB of memory, a fraction of what
-  YouTube Music in a browser tab takes.
-- **Saves recent songs.** Songs you played lately load faster the next time. You
-  choose how many to keep, or turn it off.
+- **Small and quick.** Meiro typically uses about 100 MB of memory, much less
+  than YouTube Music in a browser tab.
+- **Caches recent songs.** Tracks you played recently load faster next time.
+  Choose how many to keep, or turn the cache off.
 - **Updates itself.** Meiro checks for new versions once a day. You can turn
   this off.
 
@@ -121,13 +118,10 @@ half of the title.
   <a href="docs/screenshots/lyrics.png"><img src="docs/screenshots/lyrics.png" alt="Full player with synced lyrics, the sung line lit in the middle" width="720"></a>
 </p>
 
-Browse and play public music without signing in. Meiro signs in with a
-browser session to show your personalized Home feed and Library.
-
 ## Screenshots
 
-These show real pages from a signed-in YouTube Music session. Click one to see it
-full size.
+These screenshots show Meiro using a signed-in YouTube Music account. Click an
+image to see it full size.
 
 <table>
   <tr>
@@ -159,7 +153,7 @@ Download the latest build for your system from the
 
 ### Which file do I download?
 
-The release page lists many files. You need only one. Follow these steps.
+The release page lists several files. Choose one for your system:
 
 **Step 1. Find your system.**
 
@@ -173,11 +167,12 @@ The release page lists many files. You need only one. Follow these steps.
 
 On Windows, you can also choose the `-setup.exe` installer instead.
 
-On Arch there is no native package yet. The `.AppImage` is a single file that
-runs without an install: make it executable, then open it.
+Arch does not have a native package yet. The `.AppImage` runs without an
+installer: make the file executable, then open it.
 
-**Step 2. Pick the right chip (Linux only).** Most computers are `amd64`.
-Choose `arm64` only if your computer has an ARM chip. To check, open a terminal and run `uname -m`.
+**Step 2. Choose the right processor (Linux only).** Most computers use
+`amd64`. Choose `arm64` only for an ARM computer. To check, open a terminal
+and run `uname -m`.
 
 - It prints `x86_64`: choose the file with `amd64` in its name.
 - It prints `aarch64`: choose the file with `arm64` in its name.
@@ -185,29 +180,30 @@ Choose `arm64` only if your computer has an ARM chip. To check, open a terminal 
 Macs and Windows need no chip choice. One `.dmg` works on Apple Silicon and on
 Intel. Windows downloads are for `amd64`.
 
-**Step 3. Ignore the word "minimal".** Files with `-minimal` in the name are
-for advanced users. They need extra programs (`ffmpeg`, `yt-dlp`, and Node.js
-or Bun) that you must install yourself. If you pick one by mistake, playback
-will not work. Pick the file *without* `-minimal`.
+**Step 3. Choose a full or minimal build.** The full build is the easiest
+option. Files with `-minimal` in the name are for people who already have
+`ffmpeg`, `yt-dlp`, and Node.js or Bun installed. Without those tools, playback
+will not work. Choose a file without `-minimal` unless you specifically want
+the minimal build.
 
 If you do use a minimal build, keep `yt-dlp` up to date (for example
 `yt-dlp -U`, or your package manager's latest). An old `yt-dlp` can cause slow
 or failed playback.
 
-Do not download files named `update-*.json`, ending in `.delta`, or the
-Windows update `.tar.gz` archive. Meiro uses those to update itself. The Linux
-`.tar.gz` package is a download for Linux users.
+Do not download files named `update-*.json`, files ending in `.delta`, or the
+Windows update `.tar.gz` archive. Meiro uses those files to update itself.
+The Linux `.tar.gz` package is for Linux users.
 
 For example, on Ubuntu with a normal Intel or AMD computer, download
 `Meiro-<version>-linux-amd64.deb`.
 
 ### Install steps
 
-**macOS**: open the disk image and drag Meiro to Applications. The app is not
+**macOS:** Open the disk image and drag Meiro to Applications. The app is not
 notarized by Apple yet, so the first time, right-click it and choose **Open**
 (or allow it under System Settings > Privacy & Security).
 
-**Linux**: install the `.deb` on Debian or Ubuntu, or the `.rpm` on Fedora or a
+**Linux:** Install the `.deb` on Debian or Ubuntu, or the `.rpm` on Fedora or a
 compatible RPM-based distribution. You can also make the `.AppImage` executable
 and run it, or unpack the `.tar.gz` and run its `install.sh`. All Linux builds
 need GTK 3 and WebKitGTK 4.1. The tray also needs the AppIndicator runtime:
@@ -216,12 +212,12 @@ install `libayatana-appindicator-gtk3`. If you use an AppImage or `.tar.gz`,
 install the matching package yourself. Other distributions may use a different
 package name.
 
-**Windows portable version**: extract the `-portable.zip` file, keeping the
+**Windows portable version:** Extract the `-portable.zip` file, keeping the
 files together, then open `Meiro.exe` in the extracted `Meiro` folder. It does
 not need an installer or administrator permission. Settings and other user
 data stay in your Windows user profile. You can also run the `-setup.exe`
-installer if you prefer. **Windows support is untested.** I don't have Windows
-to test it, but it's there if you want it. Feel free to open any issues.
+installer. **Windows support is untested.** Please report any problems you
+find.
 
 ## Signing in
 
@@ -239,9 +235,9 @@ cannot find, or cannot read because yt-dlp is missing, falls back to the first
 Chromium-based browser it finds. Firefox and Zen need yt-dlp, which Meiro
 also needs for playback.
 
-YouTube Music has no sign-in that lets another app act for you. Meiro does not
-use an app-scoped OAuth token, so the session has the same account access as a
-browser session. Treat it like a password.
+YouTube Music does not offer a sign-in method for third-party apps. Meiro uses
+a browser session, which has the same account access as that browser session.
+Treat it like a password.
 
 ### Limits of the browser window
 
@@ -249,12 +245,9 @@ browser session. Treat it like a password.
   Brave, Helium, Chromium, Vivaldi, Firefox or Zen. Safari cannot be used for
   it, even when it is your default browser. If you have none of the supported
   browsers, use one of the other ways below.
-- **Google can refuse the sign-in.** Google sometimes shows "This browser or
-  app may not be secure" for a browser that it thinks software controls. Meiro
-  controls the window only to read the session, and it starts the window so
-  that the page does not report itself as automated. Google can still decide
-  to refuse, and it can change its checks at any time. If it refuses, use one
-  of the other ways below.
+- **Google may refuse the sign-in.** Google may show "This browser or app may
+  not be secure" or block the sign-in. Its checks can change at any time. If
+  that happens, try one of the other sign-in options below.
 - **The window is not your browser.** Your bookmarks, extensions, saved
   passwords and other sessions are not there. You may need to complete a
   second-factor step.
@@ -359,9 +352,9 @@ relevant part of the log.
 - The Windows build is untested (see [Install](#install)).
 - The macOS app is not notarized, so the first launch needs the manual step
   above.
-- Sign-in uses a browser session, because YouTube Music offers no OAuth
-  sign-in to other apps. The browser window needs a Chromium-based browser and
-  can be refused by Google (see [Limits of the browser window](#limits-of-the-browser-window)).
+- Sign-in uses a browser session, because YouTube Music offers no sign-in for
+  other apps. Google may refuse the browser window (see
+  [Limits of the browser window](#limits-of-the-browser-window)).
   Sessions that you import from your own browser can stop working within hours.
 - Tracks that YouTube restricts for your region or account may not play.
 
@@ -369,13 +362,12 @@ See the [open issues](https://github.com/elianiva/meiro/issues) for the rest.
 
 ## Privacy
 
-Meiro has no account, analytics or telemetry of its own, and no server of its
-own. Its network traffic goes to YouTube and Google (the YouTube Music
-interface, the streams, the artwork), and, to find streams, through yt-dlp.
-If you connect Last.fm in Settings, it also sends what you play there, and
-only then.
-Releases that update themselves also contact their update server to check for
-a new version; turn that off in Settings under Updates.
+Meiro does not run its own account service, analytics, telemetry or servers.
+It connects to YouTube and Google for YouTube Music, streams and artwork, and
+uses yt-dlp to find streams. If you connect Last.fm in Settings, Meiro also
+sends your listening there. When automatic updates are enabled, Meiro contacts
+its update server to check for new versions. You can turn this off in Settings
+under Updates.
 
 What Meiro keeps on your device:
 - **Settings**, **listening history** (the latest plays, used for the stats),
@@ -398,7 +390,7 @@ Meiro reads cookies only when you choose to sign in, and only to take the
 YouTube Music session. With the browser window, it reads them from the window
 that it opened. With an import, it reads them from the browser that you pick.
 
-## Build it yourself
+## Build from source
 
 You need [Bazel](https://bazel.build/), installed through
 [bazelisk](https://github.com/bazelbuild/bazelisk) so it reads the pinned
@@ -417,11 +409,11 @@ platforms are `darwin-universal`, `darwin-arm64`, `darwin-amd64`,
 The minimal build expects `ffmpeg`, `yt-dlp`, and either Node.js or Bun on
 `PATH`. It does not bundle any of these tools or a JavaScript runtime.
 
-Releases include full and minimal builds: one universal DMG for macOS, a
-Windows `amd64` installer for each build and a full-build portable ZIP, plus
-Linux `amd64` and `arm64` `.deb`, `.rpm`, `.AppImage`, and `.tar.gz`
-downloads. Minimal downloads include `-minimal` in the filename. See
-[`.github/workflows/release.yml`](.github/workflows/release.yml).
+Releases include full and minimal builds: a universal DMG for macOS, a Windows
+`amd64` installer for each build and a full-build portable ZIP, plus Linux
+`amd64` and `arm64` `.deb`, `.rpm`, `.AppImage`, and `.tar.gz` downloads.
+Minimal downloads include `-minimal` in the filename. Find them on the
+[releases page](https://github.com/elianiva/meiro/releases).
 
 ## Credits
 
