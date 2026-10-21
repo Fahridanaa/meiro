@@ -635,6 +635,36 @@ func TestQueueDoesNotMoveWhileRecommendationsLoad(t *testing.T) {
 	cancel()
 }
 
+func TestQueueRecommendationHeadingAlignsWithArtwork(t *testing.T) {
+	a, _ := playbackApp(t)
+	a.current = tracks("chosen")[0]
+	a.queue.replace(a.current, []youtube.MusicItem{a.current}, 0, "Queue")
+	a.queue.appendGenerated([]youtube.MusicItem{{VideoID: "recommended", Title: "Recommended track"}})
+	a.nowPlaying.open, a.nowPlaying.queueOnly, a.nowPlaying.playerShown = true, true, true
+	tt := ui.NewTester(a.nowPlayingView, 1000, 700)
+
+	heading, ok := tt.Find("Recommended")
+	if !ok {
+		t.Fatalf("recommendation heading missing: %q", tt.Texts())
+	}
+	chosenRow, ok := tt.Find("Track chosen")
+	if !ok {
+		t.Fatalf("chosen row missing: %q", tt.Texts())
+	}
+	row, ok := tt.Find("Recommended track")
+	if !ok {
+		t.Fatalf("recommended row missing: %q", tt.Texts())
+	}
+	if got := heading.X - row.X; got != 8 {
+		t.Errorf("heading-to-row inset = %g, want 8 to align with artwork", got)
+	}
+	topGap := heading.Y - (chosenRow.Y + chosenRow.H)
+	bottomGap := row.Y + 8 - (heading.Y + heading.H) // The song row pads its artwork by 8.
+	if difference := topGap - bottomGap; difference < -4 || difference > 4 {
+		t.Errorf("heading gaps are unbalanced: %g above, %g below", topGap, bottomGap)
+	}
+}
+
 func TestAutoPlayCompletesWhenNoRecommendationsAreReturned(t *testing.T) {
 	var requests atomic.Int32
 	client := youtube.NewClient(youtube.Options{

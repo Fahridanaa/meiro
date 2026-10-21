@@ -415,12 +415,14 @@ func (a *app) queueView(c *ui.Context, compact bool) {
 	ui.List(c, list, q.rows(), func(row int) {
 		index, ok := q.trackAt(row)
 		if !ok {
-			height := float32(48)
+			// Center the heading between the visible rows, including the next row's artwork inset.
+			height := float32(40)
+			topPadding := float32(8)
 			if compact {
-				height = 36
+				height = 32
+				topPadding = 4
 			}
-			ui.Column(c).Height(height).Padding(8, 16, 0).Gap(8).Children(func() {
-				ui.Divider(c)
+			ui.Column(c).Height(height).Padding(topPadding, 8, 0).Justify(ui.Center).Children(func() {
 				m3.EmphasizedText(c, m3.TitleSmall, "Recommended").TextColor(sc.OnSurfaceVariant).SingleLine()
 			})
 			return
