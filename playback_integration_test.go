@@ -660,8 +660,14 @@ func TestQueueRecommendationHeadingAlignsWithArtwork(t *testing.T) {
 	}
 	topGap := heading.Y - (chosenRow.Y + chosenRow.H)
 	bottomGap := row.Y + 8 - (heading.Y + heading.H) // The song row pads its artwork by 8.
-	if difference := topGap - bottomGap; difference < -4 || difference > 4 {
+	if difference := topGap - bottomGap; difference < -0.5 || difference > 0.5 {
 		t.Errorf("heading gaps are unbalanced: %g above, %g below", topGap, bottomGap)
+	}
+	if err := tt.Click("Recommended"); err != nil {
+		t.Fatal(err)
+	}
+	if a.nowPlaying.queueSelection.Len() != 0 || a.nowPlaying.queueSelectionCursor == a.queue.recStart {
+		t.Errorf("recommendation heading selected a queue row: %d selected, cursor %d", a.nowPlaying.queueSelection.Len(), a.nowPlaying.queueSelectionCursor)
 	}
 }
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **The queue's Recommended heading has equal space above and below, and cannot be selected.** It lines up with the artwork and separates recommendations from chosen tracks without a full-width divider.
+
 ## [0.4.4] - 2026-10-21
 
 ### Changed

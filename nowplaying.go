@@ -442,6 +442,7 @@ func (a *app) queueView(c *ui.Context, compact bool) {
 		}
 		return ""
 	}
+	list.Header = q.isDivider
 	// Rows drag to a new place in the queue; the divider between chosen and
 	// generated tracks is not draggable itself.
 	list.Reorder = a.moveQueue
@@ -463,7 +464,7 @@ func (a *app) queueView(c *ui.Context, compact bool) {
 				height = 32
 				topPadding = 4
 			}
-			ui.Column(c).Height(height).Padding(topPadding, 8, 0).Justify(ui.Center).Children(func() {
+			ui.Column(c).Height(height).Padding(topPadding, 8, 0).Justify(ui.Center).Background(sc.SurfaceContainerLow.Mix(sc.Surface, 0.1)).Children(func() {
 				m3.EmphasizedText(c, m3.TitleSmall, "Recommended").TextColor(sc.OnSurfaceVariant).SingleLine()
 			})
 			return
