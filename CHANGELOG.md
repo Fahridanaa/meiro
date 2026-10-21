@@ -42,6 +42,10 @@ and this project adheres to
   server stops at the end of a track's data, which the app took for a stream
   that broke off: it found the stream again and played the last moment of the
   track a second time. The break now ends the track.
+- **A track starts at its corrected volume.** With normalization on, the first
+  moment of a track played at the volume the track before it had — or at the
+  plain volume when the app started — until the correction landed a moment
+  later. The gain is now in place before the audio starts.
 
 ## [0.4.3] - 2026-10-20
 
