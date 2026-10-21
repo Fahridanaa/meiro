@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-10-21
+
 ### Changed
 
 - **Queue tracks can be selected and edited together.** Use Cmd-click on macOS or Ctrl-click on Windows/Linux to select tracks, then drag any selected row to move the group or right-click for **Remove N tracks**. The selection highlight follows the active theme, and the track playing is never removed.
