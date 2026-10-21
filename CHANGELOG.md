@@ -32,6 +32,9 @@ and this project adheres to
   Both copies were drawn as playing, with the dancing bars and the tonal row,
   because a row was picked out by its song rather than by its place in the
   queue.
+- **A context menu opens again where it was closed.** The mark a menu left where
+  the pointer pressed took the next right click on that spot for itself, so a
+  card's or a page's menu could be opened only once until the page changed.
 
 ## [0.4.3] - 2026-10-20
 
