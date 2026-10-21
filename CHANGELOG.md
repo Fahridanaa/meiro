@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - **The queue's Recommended heading aligns with the artwork below it, without a full-width divider.** The recommendations get a cleaner break from the chosen tracks.
+- **Long playlists show all their songs.** Later batches stay with the playlist instead of being mistaken for recommendations.
 - **Closing the player no longer flashes a blank frame before the page returns.** The page now appears as the player finishes closing, without a full-window clipping mask.
 - **Buttons near the sheet's rounded corners respond where they appear.** The corner decoration no longer takes pointer events from the controls beneath it.
 - **The full player's cover holds still while the window is resized.** It blinked to the placeholder and was decoded again at nearly every height the window passed through, which also pushed other covers out of memory.

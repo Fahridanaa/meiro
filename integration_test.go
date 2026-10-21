@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -599,6 +600,44 @@ func TestAPlaylistShowsItsSuggestionsFiveAtATime(t *testing.T) {
 	tt.Frame()
 	if got := a.page.feed.similarShown; got != 7 {
 		t.Errorf("after Show more the page shows %d suggestions, want 7", got)
+	}
+}
+
+func TestAPlaylistLoadsEveryContinuationBeforeSuggestions(t *testing.T) {
+	calls := 0
+	more, err := readPlaylistRest(context.Background(), "more-0", func(_ context.Context, token string) (*youtube.BrowseResult, error) {
+		calls++
+		if calls <= 25 {
+			if want := "more-" + strconv.Itoa(calls-1); token != want {
+				t.Fatalf("continuation %d = %q, want %q", calls, token, want)
+			}
+			items := make([]youtube.MusicItem, 12)
+			for i := range items {
+				items[i] = youtube.MusicItem{Kind: youtube.KindTrack, VideoID: "song-" + strconv.Itoa(calls) + "-" + strconv.Itoa(i)}
+			}
+			kind := "playlistVideoListContinuation"
+			if calls%2 == 0 {
+				kind = "musicPlaylistShelfContinuation"
+			}
+			return &youtube.BrowseResult{Sections: []youtube.MusicSection{{
+				Kind: kind, Items: items, ContinuationToken: "more-" + strconv.Itoa(calls),
+			}}}, nil
+		}
+		if token != "more-25" {
+			t.Fatalf("suggestions continuation = %q, want more-25", token)
+		}
+		return &youtube.BrowseResult{Sections: []youtube.MusicSection{{
+			Kind: "musicShelfRenderer", Items: []youtube.MusicItem{{VideoID: "suggested"}}, ContinuationToken: "similar-more",
+		}}}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 26 || len(more.items) != 300 {
+		t.Fatalf("read %d pages and %d playlist songs, want 26 pages and all 300 songs", calls, len(more.items))
+	}
+	if len(more.sections) != 1 || more.sections[0].Kind != "musicShelfRenderer" || more.next != "similar-more" {
+		t.Errorf("suggestions = %#v with continuation %q, want the suggestion shelf and its next token", more.sections, more.next)
 	}
 }
 

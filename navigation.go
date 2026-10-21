@@ -233,10 +233,6 @@ func (a *app) loadPage(r *route, id string) {
 	})
 }
 
-// playlistRestPages bounds how many continuations a playlist page follows for
-// its own songs before it stops, which is far more than a playlist holds.
-const playlistRestPages = 20
-
 // loadPlaylistRest follows a playlist page's continuation: the songs of the
 // playlist that came after its first page join it, and the first answer that
 // is a shelf is what YouTube suggests under the playlist, which the page shows
@@ -246,20 +242,7 @@ func (a *app) loadPlaylistRest(p *pageData, client *youtube.Client, token string
 		return
 	}
 	startTask(a, &a.pageSimilar, moreTimeout, func(ctx context.Context) (moreItems, error) {
-		var tracks []youtube.MusicItem
-		next := token
-		for page := 0; next != "" && page < playlistRestPages; page++ {
-			result, err := client.ContinueBrowse(ctx, next)
-			if err != nil {
-				return moreItems{items: tracks}, err
-			}
-			if len(result.Sections) > 0 {
-				return moreItems{items: tracks, sections: result.Sections, next: result.ContinuationToken}, nil
-			}
-			tracks = append(tracks, result.Items...)
-			next = result.ContinuationToken
-		}
-		return moreItems{items: tracks}, nil
+		return readPlaylistRest(ctx, token, client.ContinueBrowse)
 	}, func(more moreItems, err error) {
 		p.rowsDirty = true
 		if err != nil {
@@ -284,6 +267,70 @@ func (a *app) loadPlaylistRest(p *pageData, client *youtube.Client, token string
 			feed.similarShown = min(suggestionsShown, len(feed.similar))
 		}
 	})
+}
+
+// readPlaylistRest follows the playlist's continuation until YouTube returns
+// its suggestions. Playlist-list continuation renderers are more songs, not
+// suggestions; their section token keeps the playlist moving.
+func readPlaylistRest(ctx context.Context, token string, continueBrowse func(context.Context, string) (*youtube.BrowseResult, error)) (moreItems, error) {
+	var tracks []youtube.MusicItem
+	seen := make(map[string]struct{})
+	for token != "" {
+		if _, exists := seen[token]; exists {
+			break // a repeated token must not keep the page loading forever
+		}
+		seen[token] = struct{}{}
+		result, err := continueBrowse(ctx, token)
+		if err != nil {
+			return moreItems{items: tracks}, err
+		}
+
+		var playlistPage bool
+		var nextPlaylist string
+		var suggestions []youtube.MusicSection
+		for _, section := range result.Sections {
+			if isPlaylistContinuation(section.Kind) {
+				playlistPage = true
+				tracks = append(tracks, section.Items...)
+				if section.ContinuationToken != "" {
+					nextPlaylist = section.ContinuationToken
+				}
+				continue
+			}
+			suggestions = append(suggestions, section)
+		}
+		if len(suggestions) > 0 {
+			next := result.ContinuationToken
+			for _, section := range suggestions {
+				if section.ContinuationToken != "" {
+					next = section.ContinuationToken
+					break
+				}
+			}
+			return moreItems{items: tracks, sections: suggestions, next: next}, nil
+		}
+		if playlistPage {
+			token = nextPlaylist
+			if token == "" {
+				token = result.ContinuationToken
+			}
+			continue
+		}
+		tracks = append(tracks, result.Items...)
+		token = result.ContinuationToken
+	}
+	return moreItems{items: tracks}, nil
+}
+
+// isPlaylistContinuation reports whether a browse section continues the
+// playlist's own list, rather than listing recommendations beside it.
+func isPlaylistContinuation(kind string) bool {
+	switch kind {
+	case "playlistVideoListContinuation", "musicPlaylistShelfContinuation":
+		return true
+	default:
+		return false
+	}
 }
 
 // applyPage shows a result on page p. A partial one is the start of a page
