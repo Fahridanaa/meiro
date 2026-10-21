@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Queue tracks can be selected and edited together.** Use Cmd-click on macOS or Ctrl-click on Windows/Linux to select tracks, then drag any selected row to move the group or right-click for **Remove N tracks**. The selection highlight follows the active theme, and the track playing is never removed.
+- **The tray keeps its place.** macOS remembers where Meiro's icon was placed in the menu bar, and Windows remembers whether it was shown on the taskbar or in its overflow.
+- **The mini player uses the system's popover material where supported.** Its contents stay legible over the native backdrop, while platforms without vibrancy keep Meiro's themed surface.
+- **Full builds include FFmpeg 9.0.2 for audio decoding.**
 - **Scrollbars match the active theme.** Their slimmer, primary-colour thumb is consistent across pages, and carousel shelves leave more room below the bar before the next section.
 - **The queue's header reads in one line.** Where the queue plays from is one line, **Playing from** and the playlist in the same size with the playlist in bold, instead of a caption over a second line. The source, **Auto-play** and the count of the songs next sit one gap apart, and closer than before.
 - **A queue row is its song and nothing else.** The three-dot button and the X are gone from the rows, and the length takes the width they held. Right-click a row for **Move up**, **Move down** and **Remove from queue**. The track playing still offers no remove.
