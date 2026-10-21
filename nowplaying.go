@@ -140,11 +140,11 @@ func (a *app) nowPlayingView(c *ui.Context) {
 	lift := m3.Rise(panel, "rise", riseDistance, away, !a.nowPlaying.playerShown, m3.SpatialDefault)
 	panel.Top(lift).Bottom(-lift).Opacity(1 - min(max(lift/riseDistance, 0), 1))
 	a.nowPlaying.playerShown = true
-	// The player stays built while it closes, sinks away and fades, and is
-	// taken away when the sink ends.
+	// The sheet has already built the page beneath the closing player; drop
+	// the player when its slide reaches the end.
 	if a.nowPlaying.closing && lift >= riseDistance-0.5 {
 		a.nowPlaying.open, a.nowPlaying.closing = false, false
-		c.Invalidate()
+		return
 	}
 	panel.Children(func() {
 		ui.Row(c).Height(76).PaddingX(pageGutter - 8).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {

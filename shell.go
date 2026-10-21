@@ -139,29 +139,46 @@ func (a *app) sheet(c *ui.Context, bar ui.TitleBar) {
 	ui.Box(c).Absolute().Bottom(0).Right(0).Size(sheetCorner, sheetCorner).Background(tint)
 	sheet := ui.Column(c.Key("sheet")).Absolute().Top(top).Left(0).Right(sheetInset).Bottom(sheetInset).
 		Radius(m3.ExtraLarge)
-	if !a.nowPlaying.open {
+	if !a.nowPlaying.open || a.nowPlaying.closing {
 		sheet.Background(sc.Surface)
 	}
 	sheet.Children(func() {
 		defer sheetCorners(c, tint)
 		if a.nowPlaying.open {
-			// The player covers the sheet whole, and the page and the top
-			// bar with it. Only the player is built: the page and the bar
-			// were laid out and painted in full on every frame of the wave
-			// and of the slide into the player, which is most of the frame,
-			// to be covered at once.
+			if a.nowPlaying.closing {
+				// The page is only built during the short close animation,
+				// under the sinking player. The opening wave still builds only
+				// the player, so the page is not repainted on every frame of
+				// that longer transition.
+				a.sheetContents(c)
+				a.nowPlayingView(c)
+				if !a.nowPlaying.open {
+					a.nowPlaying.playerShown = false
+				}
+				return
+			}
+			// While the player is open, only it is built: the page and top
+			// bar would be laid out and painted in full on every frame of
+			// the wave and slide into the player.
 			a.nowPlayingView(c)
-			return
+			if a.nowPlaying.open {
+				return
+			}
 		}
 		a.nowPlaying.playerShown = false
-		a.topBar(c)
-		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
-			a.routerView(c)
-		})
-		if a.current.VideoID != "" {
-			a.playerBar(c)
-		}
+		a.sheetContents(c)
 	})
+}
+
+// sheetContents builds the page and the player bar beneath it.
+func (a *app) sheetContents(c *ui.Context) {
+	a.topBar(c)
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		a.routerView(c)
+	})
+	if a.current.VideoID != "" {
+		a.playerBar(c)
+	}
 }
 
 // clearance is the room a list leaves at its foot so the player never hides

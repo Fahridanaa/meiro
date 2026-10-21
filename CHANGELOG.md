@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Closing the player no longer flashes a blank frame before the page returns.** The page now appears as the player finishes closing, without a full-window clipping mask.
 - **Buttons near the sheet's rounded corners respond where they appear.** The corner decoration no longer takes pointer events from the controls beneath it.
 - **The full player's cover holds still while the window is resized.** It blinked to the placeholder and was decoded again at nearly every height the window passed through, which also pushed other covers out of memory.
 - **The mini player's Clear queue ends on the queue's edge.** Its label stopped 16 px short of the lengths under it, so the narrow column read as two right edges.

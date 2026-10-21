@@ -22,6 +22,7 @@ import (
 
 	"github.com/elianiva/meiro/internal/audio"
 	"github.com/elianiva/meiro/internal/playstate"
+	"github.com/elianiva/meiro/m3"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -1376,6 +1377,31 @@ func TestSheetCornerDoesNotCoverPlayerCloseButton(t *testing.T) {
 	tt.ClickAt(x, y)
 	if a.nowPlaying.open && !a.nowPlaying.closing {
 		t.Fatal("clicking the close button did not start closing the player")
+	}
+}
+
+func TestClosingPlayerBuildsThePageUnderThePlayer(t *testing.T) {
+	oldMotion := m3.SpatialDefault
+	m3.SpatialDefault = m3.Spring{Stiffness: 0.01, Damping: 1}
+	t.Cleanup(func() { m3.SpatialDefault = oldMotion })
+
+	a, _ := playbackApp(t)
+	a.router.Push("/home")
+	tt := ui.NewTester(a.view, 1000, 700)
+	a.nowPlaying.open, a.nowPlaying.playerShown = true, true
+	tt.Frame()
+	if _, ok := tt.Find(searchPlaceholder); ok {
+		t.Fatal("the home page search is visible behind the full player")
+	}
+
+	if err := tt.Click("Close the player"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.nowPlaying.open || !a.nowPlaying.closing {
+		t.Fatal("the click did not start the player close animation")
+	}
+	if _, ok := tt.Find(searchPlaceholder); !ok {
+		t.Fatalf("the page was not built as the player closed: %q", tt.Texts())
 	}
 }
 
