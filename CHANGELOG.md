@@ -38,6 +38,10 @@ and this project adheres to
 - **A playlist write YouTube refuses is written to the log in full**, for the
   add and the remove path, so a refusal that the player bar shows as a line can
   be read whole.
+- **A track whose stream stops at its end plays the next one.** YouTube's
+  server stops at the end of a track's data, which the app took for a stream
+  that broke off: it found the stream again and played the last moment of the
+  track a second time. The break now ends the track.
 
 ## [0.4.3] - 2026-10-20
 
