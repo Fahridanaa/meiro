@@ -10,6 +10,9 @@ and this project adheres to
 
 ### Changed
 
+- **Scrollbars match the active theme.** Their slimmer, primary-colour thumb
+  is consistent across pages, and carousel shelves leave more room below the
+  bar before the next section.
 - **The queue's header reads in one line.** Where the queue plays from is one
   line, **Playing from** and the playlist in the same size with the playlist in
   bold, instead of a caption over a second line. The source, **Auto-play** and

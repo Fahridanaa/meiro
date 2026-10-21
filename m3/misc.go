@@ -284,7 +284,8 @@ func Carousel(c *ui.Context, s *CarouselState, key any, gap, padX float32, items
 			c.Invalidate()
 		}
 	}
-	row := ui.ScrollHorizontal(c.Key(key)).TrackScroll(&s.ScrollState).Gap(gap).PaddingX(padX).AlignItems(ui.Start)
+	row := ui.ScrollHorizontal(c.Key(key)).TrackScroll(&s.ScrollState).Gap(gap).PaddingX(padX).AlignItems(ui.Start).
+		ScrollbarInsets(0, padX, 0, padX).Margin(0, 0, 12)
 	row.Children(items)
 	s.view = row.Bounds().W
 	return row

@@ -29,13 +29,6 @@ func (a *app) view(c *ui.Context) {
 	// everything.
 
 	a.syncLocation()
-	if r, _ := a.route(); r.id == routeHome {
-		// The home shelves have page arrows, so their scrollbars add no useful
-		// navigation and can cover artwork while a shelf is hovered.
-		theme := *c.Theme()
-		theme.Scrollbar = ui.RGBA(0, 0, 0, 0)
-		c.SetTheme(&theme)
-	}
 	a.followArtwork()
 	if a.notice != "" {
 		if a.noticeHelp {

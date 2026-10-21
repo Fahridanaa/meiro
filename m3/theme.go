@@ -133,8 +133,8 @@ func (t *Theme) UI(base *ui.Theme) *ui.Theme {
 	u.Focus = s.Secondary
 	u.Inverse = s.InverseSurface
 	u.InverseText = s.InverseOnSurface
-	u.Scrollbar = s.OnSurfaceVariant.Alpha(0.45)
-	u.ScrollbarWidth = 8
+	u.Scrollbar = s.Primary.Alpha(0.72)
+	u.ScrollbarWidth = 4
 	u.Radius = Medium
 	u.Spacing = 4
 	u.FontSize = 14
