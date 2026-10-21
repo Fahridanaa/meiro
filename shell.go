@@ -261,10 +261,12 @@ func (a *app) message(c *ui.Context, icon *ui.SVG, title, body, action string, r
 // sheetCorners paints the window tint over the four corners of the sheet,
 // above whatever the page draws there, so the page seems to be cut by the
 // sheet's rounded edge without a clip, whose mask is as large as the window.
+// These decorative masks must not take pointer events from controls beneath
+// them.
 func sheetCorners(c *ui.Context, tint ui.Color) {
 	n := float32(m3.ExtraLarge) * sheetReach
 	for i, corner := range sheetCornerShapes {
-		piece := ui.Icon(c, corner).FontSize(n).TextColor(tint).Absolute()
+		piece := ui.Icon(c, corner).FontSize(n).TextColor(tint).Absolute().PassThrough()
 		switch i {
 		case 0:
 			piece.Top(0).Left(0)
@@ -281,7 +283,9 @@ func sheetCorners(c *ui.Context, tint ui.Color) {
 // sheetReach is how far a corner of the sheet reaches along each edge, in
 // radii: 1 for a circular corner and 1.528665 for the continuous corner macOS
 // draws.
-var sheetReach = map[bool]float32{false: 1, true: 1.528665}[runtime.GOOS == "darwin"]
+const continuousCornerReach = 1.528665
+
+var sheetReach = map[bool]float32{false: 1, true: continuousCornerReach}[runtime.GOOS == "darwin"]
 
 // sheetCornerShapes are the four pieces that cover what lies outside the
 // rounded corners of the sheet: top left, top right, bottom left and bottom

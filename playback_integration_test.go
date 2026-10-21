@@ -1354,6 +1354,31 @@ func TestPlayerBarButtonsKeepTheirOwnEdges(t *testing.T) {
 	}
 }
 
+func TestSheetCornerDoesNotCoverPlayerCloseButton(t *testing.T) {
+	oldReach := sheetReach
+	// Exercise the larger continuous corner on every platform, including Linux.
+	sheetReach = continuousCornerReach
+	t.Cleanup(func() { sheetReach = oldReach })
+
+	a, _ := playbackApp(t)
+	tt := ui.NewTester(a.view, 1000, 700)
+	a.nowPlaying.open, a.nowPlaying.playerShown = true, true
+	tt.Frame()
+	close, ok := tt.Find("Close the player")
+	if !ok {
+		t.Fatalf("close button missing: %q", tt.Texts())
+	}
+	x, y := close.X+close.W/2, close.Y+close.H/2
+	tt.Move(x, y)
+	if got := tt.Cursor(); got != ui.CursorPointer {
+		t.Fatalf("cursor over close button = %v, want pointer", got)
+	}
+	tt.ClickAt(x, y)
+	if a.nowPlaying.open && !a.nowPlaying.closing {
+		t.Fatal("clicking the close button did not start closing the player")
+	}
+}
+
 // A track YouTube gives no audio for says why in the skip toast, and Learn
 // more explains an outdated yt-dlp for the build the listener runs.
 func TestFormatUnavailableOffersHelpForTheBuild(t *testing.T) {
