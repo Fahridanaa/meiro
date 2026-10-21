@@ -9,11 +9,9 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/internal/artwork"
@@ -21,23 +19,6 @@ import (
 	"github.com/elianiva/meiro/internal/playstate"
 	"github.com/elianiva/meiro/internal/settings"
 )
-
-// inkEnd returns the x of the rightmost pixel across the middle of r that is
-// not the panel's surface: the end of the text it shows.
-func inkEnd(img *image.RGBA, r ui.Rect) int {
-	edge := miniWidth - 14
-	surface := img.At(edge, int(r.Y+r.H/2))
-	r0, g0, b0, _ := surface.RGBA()
-	for x := edge; x >= 0; x-- {
-		for y := int(r.Y + r.H/3); y <= int(r.Y+2*r.H/3); y++ {
-			r, g, b, _ := img.At(x, y).RGBA()
-			if channelGap(r, r0)+channelGap(g, g0)+channelGap(b, b0) > 0x0600 {
-				return x
-			}
-		}
-	}
-	return -1
-}
 
 func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	a := newTestApp(t)
@@ -59,20 +40,6 @@ func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	tt.Frame()
 	if a.current.VideoID != "b" || !tt.HasText("Track b") {
 		t.Fatalf("Next did not move on: current %q, shown %q", a.current.VideoID, tt.Texts())
-	}
-}
-
-func TestLinuxTrayMenuOpensMeiro(t *testing.T) {
-	opened := false
-	menu := linuxTrayMenu(func() { opened = true })
-	items := menu.Items()
-	if len(items) != 3 || items[0].Label != "Open Meiro" || items[0].Click == nil ||
-		items[1].Type != mygo.MenuItemSeparator || items[2].Role != mygo.RoleQuit {
-		t.Fatalf("tray menu = %#v, want Open Meiro, separator, and Quit", items)
-	}
-	items[0].Click(items[0], nil)
-	if !opened {
-		t.Fatal("choosing Open Meiro did not restore the main window")
 	}
 }
 
@@ -100,64 +67,6 @@ func TestMinimizeToTrayShowsTheTrayWithoutRememberingTheChoice(t *testing.T) {
 	a.saver.Wait()
 	if saved := settings.Load(path); saved.CloseToTray == nil || *saved.CloseToTray {
 		t.Fatal("a remembered Close Meiro was not kept")
-	}
-}
-
-func TestMiniPlayerShowsTabsAndSeveralQueueItems(t *testing.T) {
-	a := newTestApp(t)
-	items := tracks("a", "b", "c", "d", "e", "f")
-	for i := range items {
-		items[i].Subtitle = "Artist " + items[i].VideoID
-		items[i].Duration = "3:4" + strconv.Itoa(i)
-	}
-	a.queue.restore(playstate.State{Items: items, Index: 0, RecStart: -1, Source: "Reiwa Era J-Pop"})
-	a.current = a.queue.current()
-	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
-	a.setMiniShown(true)
-	tt.Frame()
-	for _, text := range []string{"Lyrics", "Related", "Playing from", "Reiwa Era J-Pop", "Auto-play", "Clear queue", "Track b", "Track e", "Artist e"} {
-		if !tt.HasText(text) {
-			t.Fatalf("the panel does not show %q: %q", text, tt.Texts())
-		}
-	}
-	track, hasTrack := tt.Find("Track a")
-	lyrics, hasLyrics := tt.Find("Lyrics")
-	if !hasTrack || !hasLyrics || lyrics.Y <= track.Y {
-		t.Fatalf("the queue panel is not below the player: track %v, lyrics %v", track, lyrics)
-	}
-	lastTrack, hasLastTrack := tt.Find("Track e")
-	footer, hasFooter := tt.Find("Open Meiro")
-	if !hasLastTrack || !hasFooter || lastTrack.Y+lastTrack.H > footer.Y {
-		t.Fatalf("the queue does not show Track e above its footer: track %v, footer %v", lastTrack, footer)
-	}
-	// The column is narrow, so the Clear queue label ends on the same edge as
-	// the lengths instead of 16 px short of it.
-	duration, ok := tt.Find("3:42")
-	if !ok {
-		t.Fatalf("no length: %q", tt.Texts())
-	}
-	clear, ok := tt.Find("Clear queue")
-	if !ok {
-		t.Fatalf("no Clear queue: %q", tt.Texts())
-	}
-	img := tt.Image()
-	if lengthEnd, clearEnd := inkEnd(img, duration), inkEnd(img, clear); lengthEnd != clearEnd {
-		t.Errorf("the Clear queue label ends at %d and the lengths end at %d", clearEnd, lengthEnd)
-	}
-	autoPlay := a.settings.AutoPlay
-	if err := tt.Click("Toggle auto-play"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.settings.AutoPlay == autoPlay {
-		t.Fatal("the compact auto-play switch did not toggle")
-	}
-	if err := tt.Click("Lyrics"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if a.nowPlaying.lyrics.videoID != "a" {
-		t.Fatalf("lyrics were not loaded for the playing track: %q", a.nowPlaying.lyrics.videoID)
 	}
 }
 

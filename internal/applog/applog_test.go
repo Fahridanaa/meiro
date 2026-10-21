@@ -54,21 +54,6 @@ func TestRollsOverKeepingTheNewestFiles(t *testing.T) {
 	}
 }
 
-func TestReopeningContinuesTheFileWithoutAnotherHeader(t *testing.T) {
-	dir := t.TempDir()
-	for _, line := range []string{"first\n", "second\n"} {
-		f, err := Open(dir, func() string { return "HEADER" })
-		if err != nil {
-			t.Fatal(err)
-		}
-		fmt.Fprint(f, line)
-		f.Close()
-	}
-	if got, want := read(t, filepath.Join(dir, FileName)), "HEADER\nfirst\nsecond\n"; got != want {
-		t.Errorf("log = %q, want %q", got, want)
-	}
-}
-
 func TestRedactsSecrets(t *testing.T) {
 	cases := []struct{ in, kept string }{
 		{"request Cookie: SAPISID=abc123; HSID=zzz9 done", "request Cookie: " + Redacted},

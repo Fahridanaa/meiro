@@ -112,12 +112,6 @@ func New(options ...Option) *Player {
 	return p
 }
 
-// Available reports whether the player can play at all: it needs ffmpeg.
-func (p *Player) Available() bool {
-	_, err := p.resolveFFmpeg()
-	return err == nil
-}
-
 // Play starts url from its beginning, replacing anything playing. It returns
 // once ffmpeg has started, not when the stream ends.
 func (p *Player) Play(url string) error {

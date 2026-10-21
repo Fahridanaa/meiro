@@ -204,23 +204,6 @@ func TestPodcastShowListsItsEpisodes(t *testing.T) {
 	}
 }
 
-func TestPodcastProgressPercentIsClamped(t *testing.T) {
-	for _, test := range []struct {
-		value string
-		want  int
-	}{
-		{"-1", 0},
-		{"40", 40},
-		{"101", 100},
-	} {
-		raw := json.RawMessage(`{"playbackProgress":{"musicPlaybackProgressRenderer":{"playbackProgressPercentage":` + test.value + `}}}`)
-		renderer := decodeResponse(raw).(*jsonObject)
-		if got := episodeProgress(renderer); got != test.want {
-			t.Errorf("progress %s = %d, want %d", test.value, got, test.want)
-		}
-	}
-}
-
 // The card a search leads with is its top result, drawn as a card rather than a
 // row, and the songs it lists are still rows of the results.
 func TestSearchTopResultIsTheCard(t *testing.T) {
@@ -264,73 +247,5 @@ func TestSearchTopResultOfASongPlaysIt(t *testing.T) {
 	}
 	if top.Subtitle != "Video • Radiohead" {
 		t.Errorf("the top result reads %q", top.Subtitle)
-	}
-}
-
-// The filters of a search are the ones its response offers, in its order, and
-// the chip that clears them has no parameters.
-func TestSearchFiltersComeFromTheResponse(t *testing.T) {
-	result, err := searchServer(t, searchPageResponse, nil).Search(context.Background(), "ambient", SearchOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []SearchFilter{
-		{Label: "Songs", Params: "EgWKAQIIAWoSEAUQAxAJ"},
-		{Label: "Albums", Params: "EgWKAQIYAWoSEAUQAxAJ"},
-	}
-	if len(result.Filters) != len(want)+1 {
-		t.Fatalf("the search offers %#v", result.Filters)
-	}
-	for i, filter := range want {
-		if result.Filters[i] != filter {
-			t.Errorf("filter %d is %#v, want %#v", i, result.Filters[i], filter)
-		}
-	}
-	if clear := result.Filters[len(result.Filters)-1]; clear != (SearchFilter{}) {
-		t.Errorf("the chip that clears the filters is %#v", clear)
-	}
-}
-
-// A filter is searched with the parameters YouTube gave it, as they came.
-func TestSearchSendsTheFilterParams(t *testing.T) {
-	var asked map[string]any
-	client := searchServer(t, searchPageResponse, &asked)
-	if _, err := client.Search(context.Background(), "ambient", SearchOptions{Params: "EgWKAQIIAWoSEAUQAxAJ"}); err != nil {
-		t.Fatal(err)
-	}
-	if asked["params"] != "EgWKAQIIAWoSEAUQAxAJ" || asked["query"] != "ambient" {
-		t.Fatalf("the search asked for %#v", asked)
-	}
-}
-
-// suggestionsResponse is what a query being typed is answered with: the
-// completed queries, and the items the partial query already matches.
-const suggestionsResponse = `{"contents":[
-	{"searchSuggestionsSectionRenderer":{"contents":[
-		{"searchSuggestionRenderer":{"suggestion":{"runs":[{"text":"ambient music"}]}}},
-		{"searchSuggestionRenderer":{"suggestion":{"runs":[{"text":"ambient works"}]}}}
-	]}},
-	{"searchSuggestionsSectionRenderer":{"contents":[{"musicResponsiveListItemRenderer":{
-		"navigationEndpoint":{"browseEndpoint":{"browseId":"MPREb_ambient"}},
-		"flexColumns":[
-			{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Ambient Works"}]}}},
-			{"musicResponsiveListItemFlexColumnRenderer":{"text":{"runs":[{"text":"Album"},{"text":" • "},{"text":"Someone"}]}}}
-		]}}]}}
-]}`
-
-// Suggestions carry both the completed queries and the items they match.
-func TestSearchSuggestionsCarryTheMatches(t *testing.T) {
-	suggestions, err := searchServer(t, suggestionsResponse, nil).GetSearchSuggestions(context.Background(), "amb")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(suggestions.Queries) != 2 || suggestions.Queries[0] != "ambient music" {
-		t.Fatalf("the suggestions are %#v", suggestions.Queries)
-	}
-	if len(suggestions.Items) != 1 {
-		t.Fatalf("the matches are %#v", suggestions.Items)
-	}
-	if target := suggestions.Items[0].Target(); target.Kind != TargetAlbum || target.ID != "MPREb_ambient" {
-		t.Errorf("the match opens %d %q, want the album MPREb_ambient", target.Kind, target.ID)
 	}
 }

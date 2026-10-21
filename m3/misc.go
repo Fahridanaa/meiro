@@ -95,7 +95,7 @@ func Snackbars(c *ui.Context, inset float32) {
 			toast.Root.Row().AlignItems(ui.Center).Gap(16).Padding(6, 8, 6, 16).MinHeight(48).MaxWidth(560).
 				Radius(Medium).Background(sc.InverseSurface).TextColor(sc.InverseOnSurface)
 			Elevation(c, toast.Root, 3)
-			toast.Root.Transition(Move(SpatialFast))
+			toast.Root.Transition(SpatialFast.Motion())
 			toast.Root.Children(func() {
 				if t.Type == "error" {
 					ui.Icon(c, IconError).FontSize(20).TextColor(sc.Error)

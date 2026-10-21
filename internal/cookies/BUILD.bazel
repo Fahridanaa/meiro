@@ -6,6 +6,7 @@ go_library(
         "browsers.go",
         "chromium.go",
         "devtools.go",
+        "discover.go",
         "store.go",
         "websocket.go",
         "window.go",

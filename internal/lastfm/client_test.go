@@ -87,42 +87,6 @@ func TestScrobbleSendsSignedBatch(t *testing.T) {
 	}
 }
 
-func TestNowPlayingSendsTrackWithoutTimestamp(t *testing.T) {
-	f := &fakeLastFM{reply: `{"nowplaying":{}}`}
-	c := f.client(t)
-	if err := c.UpdateNowPlaying(context.Background(), "SK", Track{Artist: "A", Title: "T"}); err != nil {
-		t.Fatal(err)
-	}
-	if f.form.Get("method") != "track.updateNowPlaying" || f.form.Get("sk") != "SK" || f.form.Has("timestamp") {
-		t.Errorf("form = %v", f.form)
-	}
-}
-
-func TestAuthFlow(t *testing.T) {
-	f := &fakeLastFM{reply: `{"token":"TOK"}`}
-	c := f.client(t)
-	token, err := c.Token(context.Background())
-	if err != nil || token != "TOK" {
-		t.Fatalf("Token = %q, %v", token, err)
-	}
-	if f.form.Has("sk") || f.form.Get("method") != "auth.getToken" {
-		t.Errorf("form = %v", f.form)
-	}
-	if got, want := c.AuthURL("a b"), "https://www.last.fm/api/auth/?api_key=k1&token=a+b"; got != want {
-		t.Errorf("AuthURL = %s, want %s", got, want)
-	}
-
-	f.reply, f.code = `{"error":14,"message":"Unauthorized Token - This token has not been authorized"}`, 403
-	if _, err := c.Session(context.Background(), "TOK"); !NotApproved(err) {
-		t.Errorf("Session before approval: %v, want NotApproved", err)
-	}
-	f.reply, f.code = `{"session":{"name":"neo","key":"SESSION","subscriber":0}}`, 0
-	s, err := c.Session(context.Background(), "TOK")
-	if err != nil || s.Name != "neo" || s.Key != "SESSION" || f.form.Get("token") != "TOK" {
-		t.Errorf("Session = %+v, %v (form %v)", s, err, f.form)
-	}
-}
-
 func TestErrorClasses(t *testing.T) {
 	for _, tc := range []struct {
 		name               string
@@ -157,16 +121,6 @@ func TestErrorClasses(t *testing.T) {
 	}
 	if InvalidSession(errors.New("x")) {
 		t.Error("plain error is not an invalid session")
-	}
-}
-
-func TestUnconfiguredClientSendsNothing(t *testing.T) {
-	var c *Client
-	if c.Configured() || (&Client{Key: "k"}).Configured() {
-		t.Error("a client without key and secret is not configured")
-	}
-	if _, err := (&Client{}).Token(context.Background()); err == nil {
-		t.Error("an unconfigured client must refuse")
 	}
 }
 

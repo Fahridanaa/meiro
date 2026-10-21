@@ -189,6 +189,7 @@ func newApp() *app {
 		pages:      lru.New[string, *pageData](pageCacheLimit),
 		details:    lru.New[string, detail](pageCacheLimit),
 		carousels:  lru.New[string, *m3.CarouselState](pageCacheLimit * 4),
+		writing:    make(map[string]bool),
 		stop:       make(chan struct{}),
 		statsRange: 14,
 		keyboard:   keyboardState{hintDelay: hintDelay},

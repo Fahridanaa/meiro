@@ -35,5 +35,5 @@ Preconditions:
 
 - Settings write through a debounced `Writer`. Call `Save` and `Wait` before you read the file.
 - Shortcut tests press `ui.Cmd` and let the app map it, as `shortcuts_test.go` does. Copy that.
-- The session key must not appear in `settings.json` (`TestLastFMSettingsAreKeptWithoutTheSessionKey`). Grep the file in a Last.fm proof.
+- The session key must not appear in `settings.json` (`TestConnectingPausingAndDisconnectingInSettings`). Grep the file in a Last.fm proof.
 - Never put a real cookie, key or token in a proof artifact. `steps.txt` records every text on screen.

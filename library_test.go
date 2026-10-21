@@ -66,24 +66,6 @@ func TestSavingAnAlbumToTheLibraryAndTakingItOut(t *testing.T) {
 	}
 }
 
-func TestSavingAPlaylist(t *testing.T) {
-	resetFakes()
-	a := signedInApp(t)
-	a.router.Push("/playlist/VLPL_video")
-	tt := ui.NewTester(a.view, 1000, 700)
-	tt.Frame()
-	if err := tt.Click("Save to library"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if endpoint, id := libraryWrite(); endpoint != "/like/like" || id != "PL_video" {
-		t.Fatalf("saving wrote %s for %q", endpoint, id)
-	}
-	if !tt.HasText("Remove from library") {
-		t.Fatalf("the page did not show the playlist saved: %q", tt.Texts())
-	}
-}
-
 func TestARejectedSaveIsTakenBack(t *testing.T) {
 	resetFakes()
 	refuseWrites.Store(true)

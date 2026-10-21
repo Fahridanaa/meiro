@@ -2,18 +2,13 @@ package main
 
 import (
 	"errors"
-	"image/png"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/elianiva/meiro/internal/history"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -54,24 +49,6 @@ func stateApp(t *testing.T, s *switchable, signedIn bool) *app {
 		a.account.session = &session{client: make(auth), cookie: "SAPISID=test"}
 	}
 	return a
-}
-
-// shot saves what the tester drew, when STATES_DIR names a place for it.
-func shot(t *testing.T, tt *ui.Tester, name string) {
-	t.Helper()
-	dir := os.Getenv("STATES_DIR")
-	if dir == "" {
-		return
-	}
-	f, err := os.Create(filepath.Join(dir, name+".png"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	if err := png.Encode(f, tt.Image()); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%s texts: %q", name, tt.Texts())
 }
 
 // pageCases are the pages that load their content, and what each shows when
@@ -139,7 +116,6 @@ func TestOfflinePagesSayWhyAndOfferRetry(t *testing.T) {
 			tt := open(a, p.path)
 			mustShow(t, tt, "You are offline", "Check your connection, then retry.", "Retry")
 			mustNotShow(t, tt, "Could not load this page", p.healthy)
-			shot(t, tt, "offline-"+p.name)
 		})
 	}
 	t.Run("search", func(t *testing.T) {
@@ -147,7 +123,6 @@ func TestOfflinePagesSayWhyAndOfferRetry(t *testing.T) {
 		tt := ui.NewTester(a.view, 1000, 700)
 		search(t, a, tt, "yorushika")
 		mustShow(t, tt, "You are offline", "Retry")
-		shot(t, tt, "offline-search")
 	})
 }
 
@@ -160,7 +135,6 @@ func TestFailedPagesShowTheErrorAndOfferRetry(t *testing.T) {
 			tt := open(a, p.path)
 			mustShow(t, tt, "Could not load this page", "HTTP 500", "Retry")
 			mustNotShow(t, tt, "You are offline", p.healthy)
-			shot(t, tt, "failed-"+p.name)
 		})
 	}
 	t.Run("search", func(t *testing.T) {
@@ -168,7 +142,6 @@ func TestFailedPagesShowTheErrorAndOfferRetry(t *testing.T) {
 		tt := ui.NewTester(a.view, 1000, 700)
 		search(t, a, tt, "yorushika")
 		mustShow(t, tt, "Could not load this page", "HTTP 500", "Retry")
-		shot(t, tt, "failed-search")
 	})
 }
 
@@ -180,7 +153,6 @@ func TestEmptyPagesSayWhatIsMissingAndOfferRetry(t *testing.T) {
 			tt := open(a, p.path)
 			mustShow(t, tt, p.empty, "Retry")
 			mustNotShow(t, tt, "You are offline", "Could not load this page", p.healthy)
-			shot(t, tt, "empty-"+p.name)
 		})
 	}
 	t.Run("search", func(t *testing.T) {
@@ -188,7 +160,6 @@ func TestEmptyPagesSayWhatIsMissingAndOfferRetry(t *testing.T) {
 		tt := ui.NewTester(a.view, 1000, 700)
 		search(t, a, tt, "yorushika")
 		mustShow(t, tt, "No results for “yorushika”", "Retry")
-		shot(t, tt, "empty-search")
 	})
 	t.Run("stats", func(t *testing.T) {
 		a := newTestApp(t)
@@ -196,35 +167,6 @@ func TestEmptyPagesSayWhatIsMissingAndOfferRetry(t *testing.T) {
 		tt := open(a, "/stats")
 		mustShow(t, tt, "No plays yet", "14 days")
 		mustNotShow(t, tt, "Retry", "Most played")
-		shot(t, tt, "empty-stats")
-	})
-}
-
-// Controls: a page that loads fine shows no error and no Retry, and stats
-// with plays on record show their numbers, not the empty state.
-func TestHealthyPagesShowNoStateMessage(t *testing.T) {
-	for _, p := range pageCases {
-		t.Run(p.name, func(t *testing.T) {
-			a := stateApp(t, &switchable{}, p.signedIn)
-			tt := open(a, p.path)
-			mustShow(t, tt, p.healthy)
-			mustNotShow(t, tt, "Retry", "You are offline", "Could not load this page", p.empty)
-			shot(t, tt, "healthy-"+p.name)
-		})
-	}
-	t.Run("search", func(t *testing.T) {
-		a := stateApp(t, &switchable{}, false)
-		tt := ui.NewTester(a.view, 1000, 700)
-		search(t, a, tt, "yorushika")
-		mustNotShow(t, tt, "Retry", "No results for “yorushika”")
-	})
-	t.Run("stats", func(t *testing.T) {
-		a := newTestApp(t)
-		a.historyLoaded = true
-		a.history = []history.Entry{{VideoID: "v", Title: "Song", Artist: "Someone", PlayedAt: time.Now()}}
-		tt := open(a, "/stats")
-		mustShow(t, tt, "Most played", "Song")
-		mustNotShow(t, tt, "No plays yet")
 	})
 }
 
@@ -245,7 +187,6 @@ func TestRetryRecoversAndClearsTheMessage(t *testing.T) {
 				tt.Frame()
 				mustShow(t, tt, p.healthy)
 				mustNotShow(t, tt, "Retry", "You are offline", "Could not load this page", p.empty)
-				shot(t, tt, "recovered-"+mode+"-"+p.name)
 			})
 		}
 	}

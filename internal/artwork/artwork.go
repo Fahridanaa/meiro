@@ -197,7 +197,7 @@ func permanentFailure(err error) bool {
 type thumb struct {
 	bitmap *ui.Bitmap
 	// url, base and element place the bitmap in the cache's indexes and in
-	// thumbCache.recent.
+	// Cache.recent.
 	url     string
 	base    string
 	element *list.Element
@@ -315,7 +315,11 @@ func (t *Cache) Bitmap(url string, size int, corner float32) *ui.Bitmap {
 // the answer so repeated lookups skip the regex work. The caller holds the
 // lock.
 func (t *Cache) keyLocked(url string, size int, corner float32) thumbKeys {
-	permille := int(corner*1000 + 0.5)
+	// The corner is kept in steps of half a percent. Artwork whose drawn size
+	// follows the window would otherwise ask for a new bitmap, and decode the
+	// picture again, at nearly every size the window passes through; a step
+	// moves the corner by about a pixel at most.
+	permille := int(corner*200+0.5) * 5
 	request := thumbRequest{url: url, size: size, corner: permille}
 	if key, ok := t.keys[request]; ok {
 		return key
@@ -403,10 +407,12 @@ func (t *Cache) worker() {
 			t.failedFetch(job.keys.sized, err)
 			continue
 		}
-		if store != nil {
+		// The picture is shown first and written to disk after, so the
+		// write's sync never holds it up, and a picture that does not decode
+		// is not kept.
+		if t.decode(job.keys, data, true) && store != nil {
 			store.Put(job.keys.fetch, data)
 		}
-		t.decode(job.keys, data, true)
 	}
 }
 
@@ -490,15 +496,16 @@ func (t *Cache) download(url string) ([]byte, error) {
 	return bytes.Clone(data), nil
 }
 
-// decode creates a bitmap, retaining downloaded source bytes. The colour is
-// taken later, when something asks for it. Package ui registers the JPEG, PNG,
-// GIF, WebP and BMP decoders with image.Decode, and this package imports ui,
-// so the artwork formats YouTube serves all decode here.
-func (t *Cache) decode(keys thumbKeys, data []byte, keepSource bool) {
+// decode creates a bitmap, retaining downloaded source bytes, and reports
+// whether the picture decoded. The colour is taken later, when something asks
+// for it. Package ui registers the JPEG, PNG, GIF, WebP and BMP decoders with
+// image.Decode, and this package imports ui, so the artwork formats YouTube
+// serves all decode here.
+func (t *Cache) decode(keys thumbKeys, data []byte, keepSource bool) bool {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		t.failedFetch(keys.sized, fmt.Errorf("%w: %w", errDecode, err))
-		return
+		return false
 	}
 	// The pixels are drawn as they are: the picture is already the size and
 	// shape it is shown at, which the bitmap takes without copying.
@@ -513,6 +520,7 @@ func (t *Cache) decode(keys thumbKeys, data []byte, keepSource bool) {
 	t.store(url, &thumb{bitmap: bitmap, base: keys.base, bytes: thumbBytes(bitmap)})
 	t.mu.Unlock()
 	t.notify()
+	return true
 }
 
 // failedFetch notes a failed download or decode and schedules a redraw for

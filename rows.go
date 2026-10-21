@@ -72,7 +72,7 @@ func (r row) number() int {
 	return r.track + 1
 }
 
-// rowsKey summarises what setRows reads, cheaply. Comparing it each frame
+// rowsKey summarises what buildRows reads, cheaply. Comparing it each frame
 // rebuilds the rows whenever the page's shape changes, even when a caller did
 // not mark them stale; a content change within the same shape still marks
 // them with rowsDirty.
@@ -197,6 +197,7 @@ func buildRows(rows []row, playable []youtube.MusicItem, r *route, s *pageState,
 	// the queue it gathers is still the whole playlist: playing a match
 	// plays the playlist from that song's own place in it.
 	searching := r.id == routePlaylist && key.filter != ""
+	needle := strings.ToLower(strings.TrimSpace(key.filter))
 	// placed says whether the library has led with its tile yet.
 	placed := false
 	for index, section := range sections {
@@ -214,7 +215,7 @@ func buildRows(rows []row, playable []youtube.MusicItem, r *route, s *pageState,
 				if !item.IsTrack() {
 					continue
 				}
-				if matchesSearch(item, key.filter) {
+				if matchesSearch(item, needle) {
 					shown = append(shown, item)
 					places = append(places, len(playable))
 				}
@@ -328,10 +329,9 @@ func buildRows(rows []row, playable []youtube.MusicItem, r *route, s *pageState,
 	return rows, playable
 }
 
-// matchesSearch says whether a song is one a search for filter names: its title
-// or the artist beside it holds the words, whatever their case.
-func matchesSearch(item youtube.MusicItem, filter string) bool {
-	needle := strings.ToLower(strings.TrimSpace(filter))
+// matchesSearch says whether a song is one a playlist search names: its title
+// or its byline holds needle, which is the search in lower case.
+func matchesSearch(item youtube.MusicItem, needle string) bool {
 	if needle == "" {
 		return true
 	}

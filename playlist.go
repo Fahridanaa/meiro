@@ -35,8 +35,8 @@ type newPlaylistState struct {
 	err  string
 }
 
-// playlistTimeout bounds a playlist read or write.
-const playlistTimeout = time.Minute
+// writeTimeout bounds a write to the account, or a read of its playlists.
+const writeTimeout = time.Minute
 
 // openNewPlaylist asks for the name of a playlist to make, and holds a song in
 // it when one is given.
@@ -62,7 +62,7 @@ func (a *app) createNewPlaylist() {
 		err error
 	}
 	spawn(a, func() created {
-		ctx, cancel := context.WithTimeout(context.Background(), playlistTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), writeTimeout)
 		defer cancel()
 		id, err := client.CreatePlaylist(ctx, name, song.VideoID)
 		return created{id, err}
@@ -212,7 +212,7 @@ func (a *app) confirmDeletePlaylist() {
 	client, id, title := a.client(), d.id, d.title
 	d.busy, d.err = true, ""
 	spawn(a, func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), playlistTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), writeTimeout)
 		defer cancel()
 		return client.DeletePlaylist(ctx, id)
 	}, func(err error) {
@@ -305,8 +305,8 @@ func (a *app) openAddToPlaylist(item youtube.MusicItem) {
 	if known := a.knownPlaylists; known.client == client {
 		d.playlists = known.items
 	}
-	startTask(a, &d.load, playlistTimeout, func(ctx context.Context) (*youtube.BrowseResult, error) {
-		return client.GetAllLibrary(ctx)
+	startTask(a, &d.load, writeTimeout, func(ctx context.Context) (*youtube.BrowseResult, error) {
+		return client.StreamLibrary(ctx, nil)
 	}, func(library *youtube.BrowseResult, err error) {
 		if err != nil {
 			if len(d.playlists) == 0 {
@@ -372,7 +372,7 @@ func libraryPlaylists(library *youtube.BrowseResult) []youtube.MusicItem {
 func (a *app) removeFromPlaylist(playlistID string, item youtube.MusicItem) {
 	client := a.client()
 	spawn(a, func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), playlistTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), writeTimeout)
 		defer cancel()
 		return client.RemoveFromPlaylist(ctx, playlistID, item.PlaylistSetID)
 	}, func(err error) {
@@ -396,7 +396,7 @@ func (a *app) choosePlaylist(playlist youtube.MusicItem) {
 	client, item := a.client(), d.item
 	d.busy, d.err = true, ""
 	spawn(a, func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), playlistTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), writeTimeout)
 		defer cancel()
 		return client.AddToPlaylist(ctx, target.ID, item.VideoID)
 	}, func(err error) {

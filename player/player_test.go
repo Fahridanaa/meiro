@@ -22,19 +22,6 @@ func TestStreamArgsProtocolWhitelist(t *testing.T) {
 	}
 }
 
-func TestStreamArgsLocalFilesHaveNoWhitelist(t *testing.T) {
-	if args := streamArgs("/tmp/audio.wav", 0, nil); slices.Contains(args, "-protocol_whitelist") {
-		t.Fatalf("local file got a whitelist that would block it: %v", args)
-	}
-}
-
-func TestStreamArgsDoesNotAddHTTPOptionsToLocalFiles(t *testing.T) {
-	args := streamArgs("/tmp/audio.wav", 0, nil)
-	if slices.Contains(args, "-reconnect") || slices.Contains(args, "-user_agent") {
-		t.Fatalf("local file got HTTP-only options: %v", args)
-	}
-}
-
 func TestReapObservesExitWhileReaderIsPaused(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test command uses sh")

@@ -104,15 +104,6 @@ func MkdirTemp(pattern string) (string, error) {
 	return os.MkdirTemp(root, pattern)
 }
 
-// CreateTemp creates a private temporary file.
-func CreateTemp(pattern string) (*os.File, error) {
-	root, err := tempRoot()
-	if err != nil {
-		return nil, err
-	}
-	return os.CreateTemp(root, pattern)
-}
-
 // SweepStale removes entries of dir that are older than StaleAge and whose
 // name starts with one of prefixes. keep, when set, reports an entry that
 // must stay even when it is old. Newer entries belong to work that may still

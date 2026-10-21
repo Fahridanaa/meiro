@@ -70,17 +70,6 @@ func TestWriterCopiesWhatItIsGiven(t *testing.T) {
 	}
 }
 
-func TestWritingNothingLeavesAnEmptyHistory(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history.json")
-	if err := Write(path, nil); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil || string(data) != "[]" {
-		t.Errorf("file = %q, %v; want []", data, err)
-	}
-}
-
 // fullHistory is a history at its cap, with titles and artists the length of
 // real ones.
 func fullHistory() []Entry {

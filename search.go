@@ -352,3 +352,95 @@ func (a *app) searchLanding(c *ui.Context) {
 		}
 	})
 }
+
+// topResult is the card a search's results lead with: the artwork of what the
+// search found, its name, and what can be done with it. Selecting it opens the
+// page it names, or plays it; the play and shuffle buttons do that without
+// opening the page first.
+func (a *app) topResult(c *ui.Context, item youtube.MusicItem) {
+	sc := m3.Of(c).Scheme
+	target := item.Target()
+	key := "top-result"
+	card := ui.ButtonBase(c.Key(key))
+	card.Padding(8).Margin(0, pageGutter-8).Gap(20).Radius(m3.ExtraLarge).AlignItems(ui.Center).Cursor(ui.CursorPointer).Label(item.Title).
+		Background(m3.StateFill(ui.Transparent, sc.OnSurface, card.Hovered(), card.Pressed(), card.FocusVisible()))
+	played, shuffled, menuClicked := false, false, false
+	hovered := card.Hovered()
+	var menuButton, menuAnchor ui.Element
+	hasMenu, hasAnchor := false, false
+	card.Children(func() {
+		a.art(c, item.Thumbnail, 256, 132, artRadius(item, m3.LargeIncreased), func() {
+			if a.isOpening(key) {
+				// The scrim covers the artwork: attached, it leaves the flow
+				// the picture is laid out in.
+				ui.Box(c).Size(132, 132).Radius(artRadius(item, m3.LargeIncreased)).Attach(ui.AnchorTopLeft, ui.AnchorTopLeft).
+					Center().Background(sc.Scrim.Alpha(0.45)).Children(func() {
+					m3.LoadingIndicatorIn(c, 28, ui.RGB(255, 255, 255))
+				})
+				return
+			}
+			// The menu sits on the artwork, as a card's does.
+			if hovered || card.FocusVisible() || a.menu.opened(key+"-menu") {
+				if target.Kind != youtube.TargetNone {
+					menuButton = m3.IconButton(c, m3.IconButtonSpec{
+						Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
+						// On a picture the dots need a ground of their own.
+						Container: sc.SurfaceContainerHighest.Alpha(0.85),
+					}).Attach(ui.AnchorTopRight, ui.AnchorTopRight).Top(0).Right(0)
+					hasMenu = true
+				}
+			}
+		})
+		ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
+			m3.EmphasizedText(c, m3.HeadlineSmall, item.Title).MaxLines(2).TextColor(sc.OnSurface)
+			if item.Subtitle != "" {
+				m3.Text(c, m3.BodyMedium, item.Subtitle).SingleLine().TextColor(sc.OnSurfaceVariant)
+			}
+			switch target.Kind {
+			case youtube.TargetTrack:
+				ui.Row(c).Padding(4, 0, 0).Children(func() {
+					if m3.Button(c, m3.ButtonSpec{Label: "Play", Icon: m3.IconPlay, Size: m3.Small40, Key: key + "-play"}).Clicked() {
+						played = true
+					}
+				})
+			case youtube.TargetAlbum, youtube.TargetPlaylist, youtube.TargetArtist:
+				ui.Row(c).Gap(8).Padding(4, 0, 0).Children(func() {
+					if m3.Button(c, m3.ButtonSpec{Label: "Play", Icon: m3.IconPlay, Size: m3.Small40, Key: key + "-play"}).Clicked() {
+						played = true
+					}
+					if m3.Button(c, m3.ButtonSpec{Label: "Shuffle", Icon: m3.IconShuffle, Kind: m3.Tonal, Size: m3.Small40, Key: key + "-shuffle"}).Clicked() {
+						shuffled = true
+					}
+				})
+			case youtube.TargetPodcast, youtube.TargetNone:
+				// A show is followed from its page, episode by episode, not
+				// played whole from its card.
+			}
+		})
+		// A menu the pointer opened points at the pointer; one the menu
+		// button opened points at the button.
+		menuAnchor, hasAnchor = a.menu.pointerAnchor(c, key+"-menu")
+	})
+	if hasMenu {
+		pointer := card.RightClicked() || menuButton.RightClicked()
+		x, y, _ := card.PointerPosition()
+		if menuButton.Clicked() || pointer {
+			a.menu.show(key+"-menu", pointer, x, y)
+			menuClicked = true
+		}
+	}
+	if hasMenu && a.menu.owns(key+"-menu") {
+		a.cardMenu(c, a.menu.anchor(menuButton, menuAnchor, hasAnchor), key+"-menu", item, a.page.playable)
+	}
+	switch {
+	case menuClicked:
+		// The buttons inside the card receive their presses too: the switch
+		// is what keeps a press on the menu from opening the page under it.
+	case played:
+		a.playCollection(item, key, false)
+	case shuffled:
+		a.playCollection(item, key, true)
+	case card.Clicked():
+		a.activate(item, a.page.playable)
+	}
+}

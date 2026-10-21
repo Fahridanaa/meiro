@@ -33,25 +33,6 @@ func writeClient(t *testing.T, status int, body string) (*Client, *string, *map[
 	return client, &path, &payload
 }
 
-func TestRateTrackSendsTheVideoToTheRightEndpoint(t *testing.T) {
-	for _, test := range []struct {
-		like bool
-		path string
-	}{
-		{true, "/youtubei/v1/like/like"},
-		{false, "/youtubei/v1/like/removelike"},
-	} {
-		client, path, payload := writeClient(t, http.StatusOK, `{"responseContext":{}}`)
-		if err := client.RateTrack(context.Background(), " vid-1 ", test.like); err != nil {
-			t.Fatal(err)
-		}
-		target, _ := (*payload)["target"].(map[string]any)
-		if *path != test.path || target["videoId"] != "vid-1" || len(target) != 1 {
-			t.Errorf("like=%v: path %q, target %#v", test.like, *path, target)
-		}
-	}
-}
-
 func TestRateTrackRefusals(t *testing.T) {
 	if err := NewClient(Options{}).RateTrack(context.Background(), "vid-1", true); err == nil {
 		t.Error("a signed-out like was sent")

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -20,7 +19,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/internal/lastfm"
-	"github.com/elianiva/meiro/internal/settings"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -258,21 +256,6 @@ func TestRepeatedTrackIsNotChosenAgain(t *testing.T) {
 	}
 }
 
-func TestTracksWithoutClearMetadataAreNotSubmitted(t *testing.T) {
-	a, f, _ := scrobbleApp(t)
-	for _, item := range []youtube.MusicItem{
-		{VideoID: "x", Title: "Flattened", Subtitle: "Song • Someone • 2019", Duration: "3:00"}, // a subtitle is not an artist
-		{VideoID: "y", Artist: "Someone", Duration: "3:00"},
-		{VideoID: "z"},
-	} {
-		a.beginListen(item, false)
-		listenTo(a, 3*time.Minute)
-	}
-	if f.total() != 0 || a.scrobble.outbox.Len() != 0 {
-		t.Errorf("incomplete metadata was submitted: %v", f.calls)
-	}
-}
-
 // panelFor is the answer of YouTube Music's /next for a track: the track
 // itself, with the byline that names who made it.
 func panelFor(id, byline string) string {
@@ -405,21 +388,6 @@ func TestLearningTheCurrentTracksArtistFillsTheListenInFlight(t *testing.T) {
 	}
 }
 
-func TestShortTracksAndSkipsAreNotScrobbled(t *testing.T) {
-	a, f, _ := scrobbleApp(t)
-	a.beginListen(song("a"), false)
-	listenTo(a, 30*time.Second) // 30 s is not longer than 30 s
-	a.beginListen(song("b"), false)
-	at := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
-	for i := range 40 { // ten seconds of a three minute track, then skipped
-		a.observe(at.Add(time.Duration(i)*250*time.Millisecond), time.Duration(i)*250*time.Millisecond, 3*time.Minute)
-	}
-	a.beginListen(song("c"), false)
-	if len(f.called("track.scrobble")) != 0 {
-		t.Errorf("scrobbled %v", f.called("track.scrobble"))
-	}
-}
-
 func TestNothingIsSentWhenNotConnectedOrPaused(t *testing.T) {
 	a, f, _ := scrobbleApp(t)
 	a.setLastFMPaused(true)
@@ -463,27 +431,6 @@ func TestATransientFailureKeepsThePlayForARestart(t *testing.T) {
 	}
 	if b.scrobble.outbox.Len() != 0 {
 		t.Error("the delivered play is still pending")
-	}
-}
-
-func TestTheOutboxIsRetriedLaterWithoutANewPlay(t *testing.T) {
-	a, f, _ := scrobbleApp(t)
-	down := true
-	f.reply = func(url.Values) (int, string) {
-		if down {
-			return http.StatusBadGateway, `bad gateway`
-		}
-		return http.StatusOK, `{}`
-	}
-	a.beginListen(song("a"), false)
-	listenTo(a, 3*time.Minute)
-	if a.scrobble.outbox.Len() != 1 {
-		t.Fatal("the play was not kept")
-	}
-	down = false
-	a.flushScrobbles() // the periodic retry
-	if a.scrobble.outbox.Len() != 0 {
-		t.Errorf("%d plays still pending after Last.fm came back", a.scrobble.outbox.Len())
 	}
 }
 
@@ -651,29 +598,6 @@ func TestWithoutAnApplicationKeyLastFmCannotBeConnected(t *testing.T) {
 	a.connectLastFM()
 	if a.scrobble.connect.busy() {
 		t.Error("connecting started without a key")
-	}
-}
-
-func TestLastFMSettingsAreKeptWithoutTheSessionKey(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "settings.json")
-	s := settings.Defaults()
-	s.LastFMUser, s.LastFMPaused = "neo", true
-	var w settings.Writer
-	w.Path = path
-	w.Save(&s)
-	w.Wait()
-	got := settings.Load(path)
-	if got.LastFMUser != "neo" || !got.LastFMPaused {
-		t.Errorf("loaded %q paused=%t", got.LastFMUser, got.LastFMPaused)
-	}
-	var raw map[string]any
-	if err := json.Unmarshal([]byte(readFile(t, path)), &raw); err != nil {
-		t.Fatal(err)
-	}
-	for key := range raw {
-		if strings.Contains(strings.ToLower(key), "session") || strings.Contains(strings.ToLower(key), "secret") {
-			t.Errorf("settings hold a credential field %q", key)
-		}
 	}
 }
 

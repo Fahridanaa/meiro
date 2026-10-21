@@ -126,12 +126,15 @@ func (c *Cache) forgetLocked(file string) {
 	}
 }
 
-// trimLocked removes least recently used files, other than keep, until the
-// cache fits its limit.
+// trimLocked removes least recently used files, other than keep, once the
+// cache is over its limit. It makes room for a tenth of the limit more than
+// it needs, so a full cache sorts its files once per run of writes rather
+// than on every one.
 func (c *Cache) trimLocked(keep string) {
 	if c.size <= c.limit {
 		return
 	}
+	target := c.limit - c.limit/10
 	names := make([]string, 0, len(c.files))
 	for file := range c.files {
 		if file != keep {
@@ -140,7 +143,7 @@ func (c *Cache) trimLocked(keep string) {
 	}
 	sort.Slice(names, func(i, j int) bool { return c.files[names[i]].used.Before(c.files[names[j]].used) })
 	for _, file := range names {
-		if c.size <= c.limit {
+		if c.size <= target {
 			return
 		}
 		_ = os.Remove(filepath.Join(c.dir, file))

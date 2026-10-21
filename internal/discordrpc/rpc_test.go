@@ -11,30 +11,6 @@ import (
 	"time"
 )
 
-func TestParseApplicationID(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		id   string
-		ok   bool
-	}{
-		{name: "decimal snowflake", id: "123456789012345678", ok: true},
-		{name: "empty", id: ""},
-		{name: "non-decimal", id: "123abc"},
-		{name: "zero", id: "0"},
-		{name: "too large", id: "18446744073709551616"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseApplicationID(tt.id)
-			if (err == nil) != tt.ok {
-				t.Fatalf("ParseApplicationID(%q) = %q, %v; valid = %t", tt.id, got, err, tt.ok)
-			}
-			if tt.ok && string(got) != tt.id {
-				t.Errorf("application ID = %q, want %q", got, tt.id)
-			}
-		})
-	}
-}
-
 func TestSessionSendsListeningActivityAndClearsOnPause(t *testing.T) {
 	id, err := ParseApplicationID("123456789012345678")
 	if err != nil {

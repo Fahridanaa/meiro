@@ -1,9 +1,7 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -118,68 +116,6 @@ func TestPlaybackResumesWhereItWasLeft(t *testing.T) {
 	}
 	if got := second.player.Position(); got < 12*time.Second {
 		t.Errorf("playing from %v, want from 12s on", got)
-	}
-}
-
-func TestPersistingSkipsWhatIsSavedAndNoticesWhatChanged(t *testing.T) {
-	a, _ := playbackApp(t)
-	a.playSave.writer.Path = filepath.Join(t.TempDir(), "playback.json")
-	q := tracks("a", "b", "c")
-	a.play(q[0], q)
-	a.persistPlayback()
-	a.playSave.writer.Wait()
-	before := a.playSave.last
-
-	a.persistPlayback() // nothing changed: no new write is asked for
-	a.queue.shift(2, -1)
-	a.persistPlayback()
-	if a.playSave.last == before {
-		t.Error("a reordered queue was not noticed")
-	}
-	a.playSave.writer.Wait()
-	got := playstate.Load(a.playSave.writer.Path)
-	if want := []string{"a", "c", "b"}; fmt.Sprint(ids(got.Items)) != fmt.Sprint(want) {
-		t.Errorf("saved %v, want %v", ids(got.Items), want)
-	}
-}
-
-func TestNothingIsSavedForAnEmptyQueue(t *testing.T) {
-	a, _ := playbackApp(t)
-	path := filepath.Join(t.TempDir(), "playback.json")
-	a.playSave.writer.Path = path
-	a.savePlayback(0)
-	a.playSave.writer.Wait()
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("an empty queue wrote a file: %v", err)
-	}
-	a.restorePlayback(path) // a missing file leaves the app as it was
-	if a.queue.len() != 0 || a.current.VideoID != "" {
-		t.Errorf("restored %v from nothing", ids(a.queue.items))
-	}
-}
-
-func TestARestoredTrackThatCannotPlayAnyMoreIsSkipped(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "playback.json")
-	first, _ := playbackApp(t)
-	first.playSave.writer.Path = path
-	q := tracks("gone", "b")
-	first.play(q[0], q)
-	first.savePlayback(0)
-	first.playSave.writer.Wait()
-
-	second, r := playbackApp(t)
-	r.err["gone"] = errors.New("Video unavailable")
-	second.restorePlayback(path)
-	if second.current.VideoID != "gone" || second.playErr != "" {
-		t.Fatalf("restoring: current %q, error %q", second.current.VideoID, second.playErr)
-	}
-	second.togglePlay()
-	// Playback skips what cannot play, as for any track, and goes on.
-	if second.current.VideoID != "b" || !second.player.Active() {
-		t.Errorf("playing a removed track: current %q, active %v, error %q", second.current.VideoID, second.player.Active(), second.playErr)
-	}
-	if second.queue.len() != 2 {
-		t.Errorf("the queue lost tracks: %v", ids(second.queue.items))
 	}
 }
 

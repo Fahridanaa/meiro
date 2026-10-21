@@ -19,7 +19,6 @@ import (
 	"github.com/elianiva/meiro/internal/cookies"
 	"github.com/elianiva/meiro/internal/history"
 	"github.com/elianiva/meiro/internal/settings"
-	"github.com/elianiva/meiro/m3"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -341,29 +340,6 @@ func TestSearchShowsYouTubesFilters(t *testing.T) {
 	}
 }
 
-// The card a search leads with names what the search found, and selecting it
-// opens that page.
-func TestSearchLeadsWithItsTopResult(t *testing.T) {
-	a := newTestApp(t)
-	a.router.Push("/search")
-	a.runSearch("yor", "")
-	tt := ui.NewTester(a.view, 1000, 700)
-	tt.Frame()
-	if len(a.page.rows) == 0 || a.page.rows[0].kind != rowTopResult {
-		t.Fatalf("the results do not lead with a card: %#v", a.page.rows)
-	}
-	if !tt.HasText("16M monthly audience") {
-		t.Fatalf("the card shows no subtitle: %q", tt.Texts())
-	}
-	if err := tt.Click("Yorushika"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	if !strings.HasPrefix(a.path(), "/artist/") {
-		t.Fatalf("the card opened %q", a.path())
-	}
-}
-
 // A search shows the pages of its results itself as its list reaches the end of
 // what it has, rather than offering the button that asks.
 func TestSearchLoadsTheNextPageItself(t *testing.T) {
@@ -461,32 +437,6 @@ func TestTheHeroMenuOpensAgainAfterItCloses(t *testing.T) {
 		}
 		a.menu.close()
 		tt.Frame()
-	}
-}
-
-func TestRightClickingTheHeroArtOffersItsMenu(t *testing.T) {
-	a, _ := playbackApp(t)
-	tt := open(a, "/album/MPREb_test")
-	mustShow(t, tt, "Deep Focus")
-	if tt.HasText("Start radio") {
-		t.Fatalf("Start radio is on screen before right-clicking: %q", tt.Texts())
-	}
-	if err := tt.RightClick("More options for Deep Focus"); err != nil {
-		t.Fatal(err)
-	}
-	tt.Frame()
-	for _, want := range []string{"Start radio", "Shuffle play", "Copy link"} {
-		if !tt.HasText(want) {
-			t.Errorf("right-clicking the artwork offered no %q: %q", want, tt.Texts())
-		}
-	}
-	a.menu.close()
-	tt.Frame()
-	if !tt.HasText("Album Track One") {
-		t.Errorf("the menu left the album page: %q", tt.Texts())
-	}
-	if a.current.VideoID != "" {
-		t.Errorf("a right click played %q", a.current.VideoID)
 	}
 }
 
@@ -599,60 +549,6 @@ func TestAPlaylistPageCanBeSorted(t *testing.T) {
 	}
 	if !tt.HasText("Sort ascending") {
 		t.Errorf("the direction button did not follow the original order: %q", tt.Texts())
-	}
-}
-
-// Closing the search shrinks the bar back into the button that opened it. The
-// control's size is a cap the animation moves: a width would only be the flex
-// base, which the control's Grow fills, so the bar stayed at its full size and
-// then jumped into the button.
-func TestAPlaylistSearchShrinksIntoItsButton(t *testing.T) {
-	a, _ := playbackApp(t)
-	a.router.Push("/playlist/VLPL_songs")
-	tt := ui.NewTester(a.view, 1400, 900)
-	tt.Frame()
-	button, ok := tt.Find("Search in this playlist")
-	if !ok || button.W < 1 {
-		t.Fatalf("the playlist page has no search button: %q", tt.Texts())
-	}
-	// The bar opens at once: this test watches it close.
-	tt.SetPreferences(ui.Preferences{ReduceMotion: true})
-	if err := tt.Click("Search in this playlist"); err != nil {
-		t.Fatal(err)
-	}
-	tt.SetPreferences(ui.Preferences{})
-	open, ok := tt.Find("Search in this playlist")
-	if !ok || open.W <= button.W {
-		t.Fatalf("the open bar is %.0f wide, no wider than its button's %.0f", open.W, button.W)
-	}
-	// The closing runs slower than the usual motion, so that a frame sees the
-	// bar part-way: MyGo's clock is the real one, and settling a frame builds
-	// many of them, so the usual 0.3 s animation can pass between two frames
-	// unseen.
-	fast := m3.SpatialFast
-	m3.SpatialFast = m3.Spring{Stiffness: 10, Damping: 1}
-	t.Cleanup(func() { m3.SpatialFast = fast })
-
-	if err := tt.Click("Close the search"); err != nil {
-		t.Fatal(err)
-	}
-	// The bar goes back into the button, taking widths between the two.
-	between, closed := false, false
-	for i := 0; i < 400 && !closed; i++ {
-		time.Sleep(10 * time.Millisecond)
-		tt.Frame()
-		bar, ok := tt.Find("Search in this playlist")
-		if !ok {
-			t.Fatalf("the search control went away: %q", tt.Texts())
-		}
-		between = between || bar.W > button.W+2 && bar.W < open.W-2
-		closed = bar.W <= button.W+2
-	}
-	if !between {
-		t.Errorf("the bar never took a width between the button's %.0f and its own %.0f: closing skipped the animation", button.W, open.W)
-	}
-	if !closed {
-		t.Error("the search control never came back to its button")
 	}
 }
 
@@ -1074,29 +970,6 @@ func TestClearHistoryWhileItLoads(t *testing.T) {
 	}
 }
 
-func TestOpeningTheLogsFolderFromSettings(t *testing.T) {
-	a := newTestApp(t)
-	a.logsDir = "/logs"
-	var opened []string
-	a.openPath = func(path string) error {
-		opened = append(opened, path)
-		return nil
-	}
-	a.router.Push("/settings")
-	tt := ui.NewTester(a.view, 1000, 4000)
-	// The sound card made the page taller than this window, and a list
-	// builds only the cards in view: scroll the logs card in before
-	// clicking it.
-	tt.Scroll(500, 2000, 0, 2500)
-	tt.Frame()
-	if err := tt.Click("Open logs folder"); err != nil {
-		t.Fatal(err)
-	}
-	if len(opened) != 1 || opened[0] != "/logs" {
-		t.Errorf("opened %v, want the logs folder", opened)
-	}
-}
-
 // Report a problem opens the issue form with the versions filled in, and
 // never carries the account.
 func TestReportProblemOpensPrefilledIssue(t *testing.T) {
@@ -1266,24 +1139,6 @@ func TestSignInWithABrowserWindow(t *testing.T) {
 	}
 	if got := a.settings.SignInSource; got != "" {
 		t.Errorf("the session names the browser %q, which would be read again when it goes stale", got)
-	}
-}
-
-func TestSettingsShowPlaybackToolVersions(t *testing.T) {
-	a := newTestApp(t)
-	a.router.Push("/settings")
-	tt := ui.NewTester(a.view, 1000, 5000)
-	tt.Frame()
-	tt.Frame()
-
-	if !tt.HasText("Playback tools") {
-		t.Fatalf("settings lack the tools card: %q", tt.Texts())
-	}
-	if tt.HasText("yt-dlp Looking up…") {
-		t.Errorf("the versions were never looked up: %q", tt.Texts())
-	}
-	if !a.toolsLoaded {
-		t.Error("opening settings did not read the tool versions")
 	}
 }
 

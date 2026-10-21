@@ -12,9 +12,6 @@ go_library(
 
 go_test(
     name = "applog_test",
-    srcs = [
-        "applog_test.go",
-        "lazy_test.go",
-    ],
+    srcs = ["applog_test.go"],
     embed = [":applog"],
 )

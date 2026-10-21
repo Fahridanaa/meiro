@@ -2,88 +2,12 @@ package main
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/m3"
 	"github.com/elianiva/meiro/youtube"
 )
-
-// musicURL is where the user signs in, and the page whose requests carry the
-// cookie the app needs.
-const musicURL = "https://music.youtube.com"
-
-// signInDialog asks for the cookie of the user's browser session.
-func (a *app) signInDialog(c *ui.Context) {
-	s := &a.account.signIn
-	if !s.open {
-		return
-	}
-	busy := s.try.busy()
-	sc := m3.Of(c).Scheme
-	m3.Dialog(c, &s.open, 520, func() {
-		ui.Box(c).Size(56, 56).Radius(m3.Large).Background(sc.PrimaryContainer).Center().Children(func() {
-			ui.Icon(c, m3.IconLogin).FontSize(28).TextColor(sc.OnPrimaryContainer)
-		})
-		m3.EmphasizedText(c, m3.HeadlineSmall, "Sign in to YouTube Music")
-		m3.Text(c, m3.BodyMedium, "Meiro opens a separate browser window where you sign in to your Google account. Meiro never sees your password. It keeps the session of that window, which gives it the same account access as a browser, and closes the window. Your own browser is not used.").TextColor(sc.OnSurfaceVariant)
-		if m3.Button(c, m3.ButtonSpec{Label: "Sign in with a browser window", Icon: m3.IconLogin, Size: m3.Medium56, Disabled: busy, Key: "sign-in-window"}).Clicked() {
-			a.windowSignIn()
-		}
-		if s.inWindow {
-			m3.Text(c, m3.BodyMedium, "Finish signing in in the window that opened. Meiro closes it for you.").TextColor(sc.Primary)
-		}
-		toggle := m3.Button(c, m3.ButtonSpec{Label: "Advanced", Icon: advancedIcon(s.advanced), Kind: m3.TextOnly, Key: "sign-in-advanced"})
-		if toggle.Clicked() {
-			s.advanced = !s.advanced
-		}
-		if s.advanced {
-			m3.Text(c, m3.BodyMedium, "Or use a browser you are already signed in with. This copy can stop working when that browser renews its cookies. Sign in at "+musicURL+" there first, then pick it:").TextColor(sc.OnSurfaceVariant)
-			picker := m3.Button(c, m3.ButtonSpec{Label: "Import from a browser", Icon: m3.IconExpandMore, Kind: m3.Tonal, Size: m3.Medium56, Disabled: busy, Key: "import-from"})
-			if picker.Clicked() {
-				s.browsers = !s.browsers
-			}
-			m3.Menu(c, picker, &s.browsers, 240, func() {
-				for _, source := range a.account.sources() {
-					if m3.MenuItem(c, source.Label, nil).Clicked() {
-						s.browsers = false
-						a.importSignIn(source)
-					}
-				}
-			})
-			if s.importFailed != "" {
-				m3.EmphasizedText(c, m3.TitleSmall, "Importing from "+s.importFailed+" did not work. Paste the Cookie header instead.").TextColor(sc.Primary)
-			}
-			m3.Text(c, m3.BodyMedium, "To paste it: open music.youtube.com while signed in, open your browser's developer tools (F12) and go to the Network tab, reload, pick a request to music.youtube.com, and copy the value of its Cookie request header.").TextColor(sc.OnSurfaceVariant)
-			box := ui.Column(c.Key("cookie-box")).Padding(12, 16).Radius(m3.Large).Background(sc.SurfaceContainerHighest)
-			if box.FocusWithin() {
-				box.Border(2, sc.Primary)
-			}
-			box.Children(func() {
-				ui.TextAreaBase(c.Key("cookie"), &s.cookie).Placeholder("Paste the Cookie header").Label("Cookie header").
-					Password().Height(96).FontSize(14).TextColor(sc.OnSurface).AutoFocus()
-			})
-		}
-		m3.Text(c, m3.BodyMedium, "Meiro saves the session in a file in its data folder that only your user can read. Sign out to remove Meiro's saved copy.").TextColor(sc.OnSurfaceVariant)
-		if s.err != "" {
-			m3.Text(c, m3.BodyMedium, s.err).TextColor(sc.Error).MaxLines(4)
-		}
-		ui.Row(c).Gap(8).Justify(ui.End).AlignItems(ui.Center).Children(func() {
-			if busy {
-				m3.LoadingIndicator(c, 40, false)
-			}
-			if m3.Button(c, m3.ButtonSpec{Label: "Cancel", Kind: m3.TextOnly, Key: "cancel-sign-in"}).Clicked() {
-				a.dismissSignIn()
-			}
-			// Only the pasted Cookie header needs a button of its own: the
-			// window and an import start as soon as they are picked.
-			if s.advanced && m3.Button(c, m3.ButtonSpec{Label: "Sign in", Disabled: busy || strings.TrimSpace(s.cookie) == "", Key: "submit-sign-in"}).Clicked() {
-				a.submitSignIn()
-			}
-		})
-	})
-}
 
 // accountButton is the account's picture in the top bar, which opens a menu
 // of the account, the settings and the sign-in.

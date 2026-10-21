@@ -14,9 +14,7 @@
 package m3
 
 import (
-	"math"
 	"sync"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -191,72 +189,6 @@ func Elevation(c *ui.Context, e ui.Element, level int) ui.Element {
 		e.Shadow(0, 4, 4, 0, shadow.Alpha(0.30*k))
 	}
 	return e
-}
-
-// Spring is a motion token: a damped spring, given by its stiffness and
-// damping ratio, that an element settles along. Material 3 Expressive moves
-// by springs instead of fixed curves: spatial springs (position, size, shape)
-// overshoot a little, and effects springs (colour, opacity) never do.
-type Spring struct {
-	Stiffness float64
-	Damping   float64
-}
-
-// The motion tokens of Material 3 Expressive.
-var (
-	SpatialFast    = Spring{800, 0.6}
-	SpatialDefault = Spring{380, 0.8}
-	SpatialSlow    = Spring{200, 0.8}
-	EffectsFast    = Spring{3800, 1}
-	EffectsDefault = Spring{1600, 1}
-	EffectsSlow    = Spring{800, 1}
-)
-
-func (s Spring) response(t float64) float64 {
-	w0 := math.Sqrt(s.Stiffness)
-	z := s.Damping
-	if z >= 1 {
-		return 1 - math.Exp(-w0*t)*(1+w0*t)
-	}
-	wd := w0 * math.Sqrt(1-z*z)
-	return 1 - math.Exp(-z*w0*t)*(math.Cos(wd*t)+z*w0/wd*math.Sin(wd*t))
-}
-
-// Duration is how long the spring takes to settle within a fifth of a
-// percent of its target.
-func (s Spring) Duration() time.Duration {
-	w0 := math.Sqrt(s.Stiffness)
-	secs := math.Log(1/0.002) / (s.Damping * w0)
-	return time.Duration(secs * float64(time.Second))
-}
-
-// Ease is the spring's step response over its Duration, as an easing: it may
-// pass 1 and come back when the spring is underdamped.
-func (s Spring) Ease() ui.Easing {
-	total := float64(s.Duration()) / float64(time.Second)
-	end := s.response(total)
-	return func(u float32) float32 {
-		x := float64(u)
-		return float32(s.response(x*total) + (1-end)*x)
-	}
-}
-
-// Move is the transition of an element that should move, resize and recolour
-// along a spring.
-func Move(s Spring) ui.ElementTransition {
-	return s.Motion()
-}
-
-// Fade is the transition of an element that only changes colour.
-func Fade(s Spring) ui.ElementTransition {
-	a := s.animation()
-	return ui.ElementTransition{Colors: true, Animation: &a}
-}
-
-// Animate eases a value of an element to its target along a spring,
-// keeping its velocity when the target changes on the way.
-func Animate(e ui.Element, key any, target float32, s Spring) float32 {
-	return AnimateMotion(e, key, target, s)
 }
 
 // Role is an entry of the type scale.

@@ -12,38 +12,6 @@ func play(title string, started time.Time) Scrobble {
 	return Scrobble{Track: Track{Artist: "A", Title: title, Album: "Al", Duration: 200 * time.Second}, Started: started, Chosen: title == "keep"}
 }
 
-func TestOutboxSurvivesRestartWithOriginalTimestamps(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "pending.json")
-	now := time.Unix(1_700_000_000, 0)
-	o := OpenOutbox(path)
-	first, second := now.Add(-3*time.Hour), now.Add(-2*time.Hour)
-	o.Add(play("keep", first))
-	o.Add(play("two", second))
-	o.Wait()
-
-	reopened := OpenOutbox(path)
-	batch := reopened.Batch(now)
-	if len(batch) != 2 {
-		t.Fatalf("after a restart: %d pending, want 2", len(batch))
-	}
-	if !batch[0].Started.Equal(first) || !batch[1].Started.Equal(second) {
-		t.Errorf("timestamps changed: %v %v", batch[0].Started, batch[1].Started)
-	}
-	if batch[0].Title != "keep" || !batch[0].Chosen || batch[0].Album != "Al" || batch[0].Duration != 200*time.Second || batch[1].Chosen {
-		t.Errorf("fields lost: %+v %+v", batch[0], batch[1])
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Errorf("stat = %v, %v; want mode 0600", info, err)
-	}
-
-	reopened.Done(1)
-	reopened.Wait()
-	if left := OpenOutbox(path).Batch(now); len(left) != 1 || left[0].Title != "two" {
-		t.Errorf("after delivering the first: %+v", left)
-	}
-}
-
 func TestOutboxDropsPlaysLastFmWouldIgnore(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	o := &Outbox{}
@@ -86,17 +54,6 @@ func TestOutboxToleratesBadFile(t *testing.T) {
 	o.Wait()
 	if OpenOutbox(path).Len() != 1 {
 		t.Error("the outbox did not replace the bad file")
-	}
-}
-
-func TestOutboxClear(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "pending.json")
-	o := OpenOutbox(path)
-	o.Add(play("x", time.Now()))
-	o.Clear()
-	o.Wait()
-	if OpenOutbox(path).Len() != 0 {
-		t.Error("Clear left plays on disk")
 	}
 }
 

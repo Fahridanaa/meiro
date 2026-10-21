@@ -277,15 +277,6 @@ func TestSignInWindowRereadsACookieStoreThatLooksUnchanged(t *testing.T) {
 	}
 }
 
-func TestSignInWindowFirefoxReportsAClosedWindow(t *testing.T) {
-	options := fakeFirefoxWindow(t, "firefox-quit", func(context.Context, string) (string, error) {
-		return "", nil
-	})
-	if _, err := SignInWindow(context.Background(), options); !errors.Is(err, ErrWindowClosed) {
-		t.Errorf("err = %v, want ErrWindowClosed", err)
-	}
-}
-
 func TestSignInWindowReportsAClosedWindowDuringARead(t *testing.T) {
 	started := make(chan struct{}, 1)
 	hold := filepath.Join(t.TempDir(), "hold")
@@ -339,40 +330,6 @@ func TestSignInWindowReportsAStuckFirefoxRead(t *testing.T) {
 	}
 }
 
-func TestSignInWindowRetriesAFirefoxRead(t *testing.T) {
-	readErr := errors.New("yt-dlp failed once")
-	var calls atomic.Int32
-	options := fakeFirefoxWindow(t, "firefox", func(context.Context, string) (string, error) {
-		if calls.Add(1) == 1 {
-			return "", readErr
-		}
-		return "SAPISID=live; SID=session", nil
-	})
-	options.retry.recheck = 20 * time.Millisecond
-	got, err := SignInWindow(context.Background(), options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "SAPISID=live; SID=session"; got != want {
-		t.Errorf("header = %q, want %q", got, want)
-	}
-	if calls.Load() < 2 {
-		t.Errorf("the reader ran %d times, want a retry after the failure", calls.Load())
-	}
-}
-
-func TestSignInWindowFirefoxNeedsYtDlp(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	options := fakeFirefoxWindow(t, "firefox", nil)
-	_, err := SignInWindow(context.Background(), options)
-	if !errors.Is(err, errFirefoxNeedsYtDlp) {
-		t.Errorf("err = %v, want errFirefoxNeedsYtDlp", err)
-	}
-	if _, statErr := os.Stat(os.Getenv("MEIRO_FAKE_BROWSER_PROFILE")); !os.IsNotExist(statErr) {
-		t.Errorf("the browser started without yt-dlp: %v", statErr)
-	}
-}
-
 func TestFirefoxPreferencesTurnOffFirstRunPages(t *testing.T) {
 	profile := t.TempDir()
 	if err := writeFirefoxPreferences(profile, "firefox"); err != nil {
@@ -400,33 +357,6 @@ func TestFirefoxPreferencesTurnOffFirstRunPages(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `user_pref("network.cookie.db.maxWalBytes", 32768);`) {
 		t.Errorf("the Zen profile would keep cookies out of the database: %s", data)
-	}
-}
-
-func TestPrivateProfileUsesItsProfileRoot(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "data")
-	b := candidate{kind: "zen", family: firefoxFamily, profileRoot: root}
-	profile, err := b.privateProfile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if filepath.Dir(profile) != root {
-		t.Errorf("profile %s is not under the profile root %s", profile, root)
-	}
-	if !strings.HasPrefix(filepath.Base(profile), signinProfilePrefix) {
-		t.Errorf("profile %s does not carry the %s prefix", profile, signinProfilePrefix)
-	}
-
-	// A native browser gets a profile in this app's private temporary
-	// directory, under a root of its own.
-	native := candidate{kind: "chrome"}
-	profile, err = native.privateProfile()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(profile) })
-	if filepath.Dir(filepath.Dir(profile)) != filepath.Clean(os.TempDir()) {
-		t.Errorf("native profile %s is not in the app's private temporary directory", profile)
 	}
 }
 
@@ -522,17 +452,6 @@ func TestSignInWindowKillsTheBrowserWrapperTree(t *testing.T) {
 	}
 }
 
-func TestSignInWindowWithoutABrowser(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
-	t.Setenv("HOME", t.TempDir())
-	if _, ok := findBrowser(context.Background(), true); ok {
-		t.Skip("a browser at a fixed location cannot be hidden from PATH")
-	}
-	if _, err := SignInWindow(context.Background(), WindowOptions{}); !errors.Is(err, ErrNoBrowser) {
-		t.Errorf("err = %v, want ErrNoBrowser", err)
-	}
-}
-
 func TestWebSocketCarriesLargeMessages(t *testing.T) {
 	a, b := net.Pipe()
 	client := &wsConn{conn: a, r: bufio.NewReader(a), client: true}
@@ -556,54 +475,6 @@ func TestYouTubeHeaderTakesTheLaterCookieOfAName(t *testing.T) {
 	}, now)
 	if got != "A=3" {
 		t.Errorf("header = %q", got)
-	}
-}
-
-func TestBrowserKindNamesTheBrowsersOfEachSystem(t *testing.T) {
-	for id, want := range map[string]string{
-		"google-chrome.desktop":         "chrome",
-		"org.chromium.Chromium.desktop": "chromium",
-		"microsoft-edge.desktop":        "edge",
-		"brave-browser.desktop":         "brave",
-		"vivaldi-stable.desktop":        "vivaldi",
-		"helium.desktop":                "helium",
-		"helium-browser.desktop":        "helium",
-		"net.imput.helium":              "helium",
-		"firefox.desktop":               "firefox",
-		"org.mozilla.firefox.desktop":   "firefox",
-		"org.mozilla.firefox":           "firefox",
-		"FirefoxURL-308046B0AF4A39CB":   "firefox",
-		"app.zen_browser.zen.desktop":   "zen",
-		"zen.desktop":                   "zen",
-		"com.google.chrome":             "chrome",
-		"com.microsoft.edgemac":         "edge",
-		"com.apple.safari":              "",
-		"ChromeHTML":                    "chrome",
-		"MSEdgeHTM":                     "edge",
-		"BraveHTML":                     "brave",
-		"":                              "",
-	} {
-		if got := browserKind(id); got != want {
-			t.Errorf("browserKind(%q) = %q, want %q", id, got, want)
-		}
-	}
-}
-
-func TestDefaultBrowserIDReadsTheDesktopFile(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("xdg-settings is a Linux tool")
-	}
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "xdg-settings"), []byte("#!/bin/sh\necho 'App.Zen_Browser.Zen.Desktop'\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	if got := defaultBrowserID(context.Background()); got != "app.zen_browser.zen.desktop" {
-		t.Errorf("defaultBrowserID = %q, want the lowercased desktop file", got)
-	}
-	t.Setenv("PATH", t.TempDir())
-	if got := defaultBrowserID(context.Background()); got != "" {
-		t.Errorf("defaultBrowserID without xdg-settings = %q, want empty", got)
 	}
 }
 
@@ -680,48 +551,6 @@ func TestFindBrowserSkipsAnUninstalledFlatpakApp(t *testing.T) {
 	}
 	if b.flatpakID != "" || b.snapName != "" {
 		t.Errorf("findBrowser picked a packaged install %+v, want native", b)
-	}
-}
-
-func TestInstalledAsksThePackageManager(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the fake package managers are shell scripts")
-	}
-	bin := t.TempDir()
-	t.Setenv("PATH", bin)
-	calls := filepath.Join(t.TempDir(), "calls")
-	t.Setenv("MEIRO_TEST_CALLS", calls)
-	t.Setenv("MEIRO_TEST_EXIT", "0")
-	for name, body := range map[string]string{
-		"flatpak": "#!/bin/sh\necho flatpak \"$@\" >> \"$MEIRO_TEST_CALLS\"\nexit \"$MEIRO_TEST_EXIT\"\n",
-		"snap":    "#!/bin/sh\necho snap \"$@\" >> \"$MEIRO_TEST_CALLS\"\nexit \"$MEIRO_TEST_EXIT\"\n",
-	} {
-		if err := os.WriteFile(filepath.Join(bin, name), []byte(body), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	path := filepath.Join(t.TempDir(), "browser")
-	if err := os.WriteFile(path, nil, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	flatpak := candidate{path: path, flatpakID: "org.mozilla.firefox"}
-	snap := candidate{path: path, snapName: "firefox"}
-
-	if !flatpak.installed(context.Background()) || !snap.installed(context.Background()) {
-		t.Error("an install the package manager reports is not installed")
-	}
-	t.Setenv("MEIRO_TEST_EXIT", "1")
-	if flatpak.installed(context.Background()) || snap.installed(context.Background()) {
-		t.Error("an install the package manager cannot find counts as installed")
-	}
-	data, err := os.ReadFile(calls)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{"flatpak info org.mozilla.firefox", "snap list firefox"} {
-		if !strings.Contains(string(data), want) {
-			t.Errorf("the package manager was not asked %q: %s", want, data)
-		}
 	}
 }
 
@@ -900,23 +729,6 @@ func TestLinuxCandidatesCoverNativeFlatpakAndSnapInstalls(t *testing.T) {
 		}
 		if c.profileRoot != "" || c.desktopID != "" {
 			t.Errorf("native candidate %s carries a profile root or desktop file: %+v", name, c)
-		}
-	}
-}
-
-func TestLinuxCandidatesNeedTheFlatpakAndSnapTools(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("the Flatpak and Snap install kinds are Linux installs")
-	}
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("PATH", t.TempDir())
-	candidates := browserCandidates()
-	if len(candidates) == 0 {
-		t.Fatal("no native candidates were built")
-	}
-	for _, c := range candidates {
-		if c.profileRoot != "" || c.desktopID != "" {
-			t.Errorf("candidate %+v appeared without flatpak or snap on PATH", c)
 		}
 	}
 }

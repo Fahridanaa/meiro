@@ -122,3 +122,58 @@ func isArtistID(id string) bool {
 func isBrowsablePlaylist(id string) bool {
 	return strings.HasPrefix(id, "VL") || strings.HasPrefix(id, "PL")
 }
+
+// MusicItem is the common subset of YouTube Music song, video, album, artist,
+// and playlist renderers.
+type MusicItem struct {
+	ID            string   `json:"id,omitempty"`
+	VideoID       string   `json:"videoId,omitempty"`
+	BrowseID      string   `json:"browseId,omitempty"`
+	PlaylistID    string   `json:"playlistId,omitempty"`
+	PlaylistSetID string   `json:"playlistSetVideoId,omitempty"`
+	Title         string   `json:"title,omitempty"`
+	Subtitle      string   `json:"subtitle,omitempty"`
+	Kind          ItemKind `json:"kind,omitempty"`
+	Duration      string   `json:"duration,omitempty"`
+	Thumbnail     string   `json:"thumbnail,omitempty"`
+	// Description is what a show's page says of an episode, on one line. It
+	// is not saved with the item: it runs long, and only the show's page
+	// shows it.
+	Description string `json:"-"`
+	// ProgressPercent is the account's reported episode progress, when the
+	// show page includes it. It is a hint for resume, not saved with the item.
+	ProgressPercent int `json:"-"`
+	// Like is whether the account has liked the track, when the page that
+	// held it said. It is not saved with the item: a like changes elsewhere.
+	Like LikeStatus `json:"-"`
+	// Library is whether the account has saved the album or the playlist, when
+	// the item's menu said, and nil when it did not. It is not saved with the
+	// item, for the same reason, and it is a pointer so that the items that
+	// have none, which are nearly all of them, stay small: a page's rows copy
+	// them. Nothing changes what it points to; a change gives the item another.
+	Library *LibraryState `json:"-"`
+	// Artist is the first artist the item credits, which the scrobble and the
+	// lyrics search take, Album the album, and Artists every artist. They are
+	// read from the links of the byline rather than from the flattened
+	// Subtitle, which also holds the kind, the year and the length. They are
+	// empty when the byline links none, and nothing reconstructs them from the
+	// Subtitle. They are strings, not a list, so that an item stays comparable.
+	Artist string `json:"artist,omitempty"`
+	// Artists is every artist the item credits, in the order its byline links
+	// them, joined as "First, Second". It is empty for an item whose byline links
+	// none. Artist is the first of them.
+	Artists string `json:"artists,omitempty"`
+	Album   string `json:"album,omitempty"`
+}
+
+// setCredits makes item credit the artists a byline links and the album.
+// Artist names the first of them, which the scrobble and the lyrics search
+// take, and Artists names every one, the line the presence shows.
+func (item *MusicItem) setCredits(artists []string, album string) {
+	item.Album = album
+	item.Artists = strings.Join(artists, ", ")
+	item.Artist = ""
+	if len(artists) > 0 {
+		item.Artist = artists[0]
+	}
+}

@@ -5,7 +5,6 @@ go_library(
     srcs = [
         "null.go",
         "player.go",
-        "silent.go",
         "window_unix.go",
         "window_windows.go",
     ],

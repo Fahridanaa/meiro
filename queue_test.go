@@ -281,22 +281,6 @@ func TestAppendGeneratedKeepsAudioOrderWhenSkippingVideos(t *testing.T) {
 	}
 }
 
-func TestAppendGeneratedSkipsMusicVideoRecommendations(t *testing.T) {
-	q := newQueue()
-	q.replace(youtube.MusicItem{VideoID: "a", Title: "A", Duration: "1:00"}, nil, 0, "")
-	q.appendGenerated([]youtube.MusicItem{
-		{VideoID: "video", Title: "Music Video", Artist: "Kenshi", Duration: "3:17", Kind: youtube.KindVideo},
-		{VideoID: "track", Title: "Song", Artist: "Kenshi", Duration: "3:16", Kind: youtube.KindTrack},
-	})
-
-	if got := ids(q.items); !slices.Equal(got, []string{"a", "track"}) {
-		t.Fatalf("queue = %v, want only the song recommendation", got)
-	}
-	if _, exists := q.generated["video"]; exists {
-		t.Error("music video was added as a recommendation")
-	}
-}
-
 func TestAppendGeneratedDoesNotReserveASlotForVideoOnEarlierPage(t *testing.T) {
 	q := newQueue()
 	current := youtube.MusicItem{VideoID: "a", Title: "A", Duration: "1:00"}

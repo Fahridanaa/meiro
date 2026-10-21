@@ -73,23 +73,27 @@ type Client struct {
 	allowInsecureCookieAuth bool
 }
 
-// newHTTPClient builds the default HTTP client. It bounds only the wait for
-// response headers: the request context governs how long the body may take.
-func newHTTPClient(responseHeaderTimeout time.Duration) *http.Client {
+// defaultHTTPClient is the HTTP client of every Client that is not given one.
+// It bounds only the wait for response headers: the request context governs
+// how long the body may take. The clients share it, and with it their open
+// connections, so a client made for a new session, or to check one, does not
+// pay for a handshake of its own. It holds no cookies: a client sends its own
+// with each request.
+var defaultHTTPClient = func() *http.Client {
 	base, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
 		base = &http.Transport{Proxy: http.ProxyFromEnvironment}
 	}
 	transport := base.Clone()
-	transport.ResponseHeaderTimeout = responseHeaderTimeout
+	transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
 	return &http.Client{Transport: transport}
-}
+}()
 
 // NewClient constructs a client. No network request is made until a method is
 // called.
 func NewClient(options Options) *Client {
 	if options.HTTPClient == nil {
-		options.HTTPClient = newHTTPClient(defaultResponseHeaderTimeout)
+		options.HTTPClient = defaultHTTPClient
 	}
 	if options.BaseURL == "" {
 		options.BaseURL = defaultAPIURL
@@ -136,7 +140,7 @@ type clientUserContext struct {
 }
 
 // context builds the request context shared by every InnerTube client. The
-// client-specific name and version are set by executeForClient, which knows
+// client-specific name and version are set by executeAs, which knows
 // which client the request speaks as.
 func (c *Client) context() clientContext {
 	var ctx clientContext
@@ -192,15 +196,15 @@ const (
 	androidMusicUserAgent = "com.google.android.apps.youtube.music/" + androidMusicVersion + " (Linux; U; Android 14) gzip"
 )
 
+// execute sends a request as the YouTube Music web app, asking for songs
+// rather than music videos.
 func (c *Client) execute(ctx context.Context, endpoint string, payload map[string]any) (json.RawMessage, error) {
-	return c.executeForClient(ctx, endpoint, payload, musicClient)
+	return c.executeAs(ctx, musicClient, true, endpoint, payload)
 }
 
-func (c *Client) executeForClient(ctx context.Context, endpoint string, payload map[string]any, client innerTubeClient) (json.RawMessage, error) {
-	return c.executeForClientWithAudioOnly(ctx, endpoint, payload, client, client == musicClient)
-}
-
-func (c *Client) executeForClientWithAudioOnly(ctx context.Context, endpoint string, payload map[string]any, client innerTubeClient, audioOnly bool) (json.RawMessage, error) {
+// executeAs sends a request as client. audioOnly asks YouTube Music for songs
+// rather than music videos.
+func (c *Client) executeAs(ctx context.Context, client innerTubeClient, audioOnly bool, endpoint string, payload map[string]any) (json.RawMessage, error) {
 	var clientName, clientID, clientVersion string
 	switch client {
 	case musicClient:
@@ -252,7 +256,7 @@ func (c *Client) executeForClientWithAudioOnly(ctx context.Context, endpoint str
 	req.Header.Set("Referer", origin+"/")
 	req.Header.Set("X-YouTube-Client-Name", clientID)
 	req.Header.Set("X-YouTube-Client-Version", clientVersion)
-	c.setIdentityWithVisitorData(req, requestContext.Client.VisitorData)
+	c.setIdentity(req, requestContext.Client.VisitorData)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -268,17 +272,19 @@ func (c *Client) executeForClientWithAudioOnly(ctx context.Context, endpoint str
 	if err != nil {
 		return nil, err
 	}
-	// The body is the result as it came: unmarshalling it into a RawMessage
-	// only checked it, and copied all of it to do so.
-	if !json.Valid(responseBody) {
-		return nil, fmt.Errorf("youtube: decode %s response: invalid JSON", endpoint)
-	}
+	// The body is the result as it came. Reading the visitor ID from it also
+	// checks that all of it is JSON, so it is scanned once here, not twice.
 	var responseMetadata struct {
 		ResponseContext struct {
 			VisitorData string `json:"visitorData"`
 		} `json:"responseContext"`
 	}
-	if err := json.Unmarshal(responseBody, &responseMetadata); err == nil {
+	if err := json.Unmarshal(responseBody, &responseMetadata); err != nil {
+		var syntax *json.SyntaxError
+		if errors.As(err, &syntax) {
+			return nil, fmt.Errorf("youtube: decode %s response: invalid JSON", endpoint)
+		}
+	} else {
 		c.rememberVisitorData(responseMetadata.ResponseContext.VisitorData)
 	}
 	return json.RawMessage(responseBody), nil
@@ -286,11 +292,7 @@ func (c *Client) executeForClientWithAudioOnly(ctx context.Context, endpoint str
 
 // setIdentity adds who is asking: the visitor of an anonymous visit, or the
 // signed-in account.
-func (c *Client) setIdentity(req *http.Request) {
-	c.setIdentityWithVisitorData(req, c.currentVisitorData())
-}
-
-func (c *Client) setIdentityWithVisitorData(req *http.Request, visitorData string) {
+func (c *Client) setIdentity(req *http.Request, visitorData string) {
 	// The visitor ID is an anonymous visit's; a signed-in session is its own.
 	if visitorData != "" && c.cookieAuth == nil {
 		req.Header.Set("X-Goog-Visitor-Id", visitorData)
@@ -345,12 +347,4 @@ func responseError(operation string, resp *http.Response) error {
 		return fmt.Errorf("youtube: %s returned HTTP %d: %s: %w", operation, resp.StatusCode, diagnostic, ErrUnauthorized)
 	}
 	return fmt.Errorf("youtube: %s returned HTTP %d: %s", operation, resp.StatusCode, diagnostic)
-}
-
-func (c *Client) browse(ctx context.Context, browseID string) (*BrowseResult, error) {
-	raw, err := c.execute(ctx, "browse", map[string]any{"browseId": browseID})
-	if err != nil {
-		return nil, err
-	}
-	return c.newBrowseResult(raw), nil
 }

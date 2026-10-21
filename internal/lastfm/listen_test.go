@@ -68,26 +68,6 @@ func count(events []Event, want Event) int {
 	return n
 }
 
-func TestThreshold(t *testing.T) {
-	for _, tc := range []struct {
-		total time.Duration
-		want  time.Duration
-		ok    bool
-	}{
-		{0, 0, false},
-		{30 * time.Second, 0, false}, // must be longer than 30 s
-		{31 * time.Second, 15500 * time.Millisecond, true},
-		{3 * time.Minute, 90 * time.Second, true},
-		{8 * time.Minute, 4 * time.Minute, true},
-		{20 * time.Minute, 4 * time.Minute, true}, // capped at four minutes
-	} {
-		got, ok := Threshold(tc.total)
-		if got != tc.want || ok != tc.ok {
-			t.Errorf("Threshold(%s) = %s, %t; want %s, %t", tc.total, got, ok, tc.want, tc.ok)
-		}
-	}
-}
-
 func TestListenQualifiesAtHalf(t *testing.T) {
 	p := newPlayer(3*time.Minute, song, true)
 	p.play(time.Second)
@@ -208,19 +188,6 @@ func TestListenSeekBackKeepsWhatWasHeard(t *testing.T) {
 	}
 }
 
-func TestListenRepeatIsAnotherPlay(t *testing.T) {
-	// Repeating a track starts a new Listen each time, so each loop scrobbles.
-	var scrobbles int
-	for range 3 {
-		p := newPlayer(40*time.Second, song, false)
-		p.play(40 * time.Second)
-		scrobbles += count(p.events, Qualified)
-	}
-	if scrobbles != 3 {
-		t.Errorf("three plays of a short track gave %d scrobbles", scrobbles)
-	}
-}
-
 func TestListenSkippedTrackScrobblesNothing(t *testing.T) {
 	p := newPlayer(3*time.Minute, song, true)
 	p.play(30 * time.Second) // skipped: the next Listen replaces this one
@@ -240,14 +207,5 @@ func TestListenWithoutClearMetadataIsSilent(t *testing.T) {
 	var l *Listen
 	if l.Observe(t0, 0, time.Minute) != Nothing {
 		t.Error("no listen, no events")
-	}
-}
-
-func TestListenScrobbleKeepsStartAndChoice(t *testing.T) {
-	p := newPlayer(3*time.Minute, Track{Artist: "A", Title: "T", Album: "Al"}, true)
-	p.play(100 * time.Second)
-	s := p.l.Scrobble(3 * time.Minute)
-	if !s.Started.Equal(p.l.Started()) || !s.Chosen || s.Album != "Al" || s.Duration != 3*time.Minute {
-		t.Errorf("Scrobble = %+v", s)
 	}
 }

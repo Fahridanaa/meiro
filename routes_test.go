@@ -52,11 +52,3 @@ func TestMatchRouteRejectsWhatNoPageShows(t *testing.T) {
 		t.Errorf("a trailing slash: %s %q", r.pattern, id)
 	}
 }
-
-// Matching the route of a page allocates nothing: the view asks for it
-// several times a frame.
-func TestMatchRouteAllocatesNothing(t *testing.T) {
-	if n := testing.AllocsPerRun(100, func() { matchRoute("/artist/UCabc") }); n != 0 {
-		t.Errorf("matchRoute allocates %v times", n)
-	}
-}

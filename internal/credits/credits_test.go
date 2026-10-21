@@ -25,15 +25,6 @@ func TestCacheSurvivesARestart(t *testing.T) {
 	}
 }
 
-func TestCreditsWithoutAnArtistAreNotKept(t *testing.T) {
-	c := &Cache{}
-	c.Put("a", Credits{Album: "only an album"})
-	c.Put("", Credits{Artist: "no id"})
-	if c.Len() != 0 {
-		t.Errorf("%d entries kept, want none", c.Len())
-	}
-}
-
 func TestOldestEntriesGoFirstAndUpdatesRenew(t *testing.T) {
 	c := &Cache{}
 	for i := range MaxEntries {

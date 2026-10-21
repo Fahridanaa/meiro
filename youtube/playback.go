@@ -56,10 +56,10 @@ func (c *Client) Loudness(ctx context.Context, videoID string) (Loudness, error)
 	if strings.TrimSpace(videoID) == "" {
 		return Loudness{}, errors.New("youtube: loudness requires a video ID")
 	}
-	raw, err := c.executeForClient(ctx, "player", map[string]any{
+	raw, err := c.executeAs(ctx, webClient, false, "player", map[string]any{
 		"videoId":         videoID,
 		"playbackContext": map[string]any{"contentPlaybackContext": map[string]any{}},
-	}, webClient)
+	})
 	if err != nil {
 		return Loudness{}, err
 	}
@@ -196,7 +196,7 @@ func (c *Client) pingTracking(ctx context.Context, target *url.URL, params url.V
 	}
 	req.Header.Set("User-Agent", browserUserAgent)
 	req.Header.Set("Referer", "https://music.youtube.com/")
-	c.setIdentity(req)
+	c.setIdentity(req, c.currentVisitorData())
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err

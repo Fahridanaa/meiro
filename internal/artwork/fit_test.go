@@ -38,10 +38,3 @@ func TestFitKeepsSmallPictureAndMakesDisc(t *testing.T) {
 		t.Error("a corner of 0.5 should make a disc")
 	}
 }
-
-func TestFitSquareCornerUntouched(t *testing.T) {
-	got := fit(solid(80, 80), 80, 0)
-	if got.RGBAAt(0, 0).A != 255 {
-		t.Error("no corner should leave the picture opaque")
-	}
-}

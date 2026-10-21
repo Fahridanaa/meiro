@@ -6,6 +6,25 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// Spring is a motion token: a damped spring, given by its stiffness and
+// damping ratio, that an element settles along. Material 3 Expressive moves
+// by springs instead of fixed curves: spatial springs (position, size, shape)
+// overshoot a little, and effects springs (colour, opacity) never do.
+type Spring struct {
+	Stiffness float64
+	Damping   float64
+}
+
+// The motion tokens of Material 3 Expressive.
+var (
+	SpatialFast    = Spring{800, 0.6}
+	SpatialDefault = Spring{380, 0.8}
+	SpatialSlow    = Spring{200, 0.8}
+	EffectsFast    = Spring{3800, 1}
+	EffectsDefault = Spring{1600, 1}
+	EffectsSlow    = Spring{800, 1}
+)
+
 // animation is the token as MyGo's motion core sees it: a physical spring
 // with the token's stiffness and damping, so a target that changes on the
 // way keeps its velocity instead of starting over, and the desktop's
@@ -25,10 +44,16 @@ func (s Spring) Motion() ui.ElementTransition {
 	return ui.ElementTransition{Animation: &a}
 }
 
-// AnimateMotion eases a value of an element to its target along the token's
-// spring, keeping its velocity when the target changes on the way.
-func AnimateMotion(e ui.Element, key any, target float32, s Spring) float32 {
+// Animate eases a value of an element to its target along a spring,
+// keeping its velocity when the target changes on the way.
+func Animate(e ui.Element, key any, target float32, s Spring) float32 {
 	return e.AnimateTo(key, target, s.animation())
+}
+
+// Fade is the transition of an element that only changes colour.
+func Fade(s Spring) ui.ElementTransition {
+	a := s.animation()
+	return ui.ElementTransition{Colors: true, Animation: &a}
 }
 
 // Rise is how far below its place, in DIPs, an element is while it comes in
@@ -39,5 +64,5 @@ func Rise(e ui.Element, key any, from, to float32, entering bool, s Spring) floa
 	if entering {
 		e.Jump(key, from)
 	}
-	return AnimateMotion(e, key, to, s)
+	return Animate(e, key, to, s)
 }

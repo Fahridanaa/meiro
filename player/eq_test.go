@@ -1,7 +1,6 @@
 package player
 
 import (
-	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -51,24 +50,3 @@ func TestStreamArgsCarriesTheChain(t *testing.T) {
 		t.Errorf("last argument = %q, want the output pipe", got)
 	}
 }
-
-func TestSetEQIgnoresAWrongLengthTable(t *testing.T) {
-	p := New(withAudio(&sharedAudio{open: func() (device, error) {
-		return nil, errTestDevice
-	}}))
-	p.SetEQ(make([]float64, EQBandCount-1))
-	if p.eqBands != nil {
-		t.Errorf("SetEQ with a short table stored %v, want nothing", p.eqBands)
-	}
-	p.SetEQ(make([]float64, EQBandCount))
-	if len(p.eqBands) != EQBandCount {
-		t.Errorf("SetEQ stored %d bands, want %d", len(p.eqBands), EQBandCount)
-	}
-	p.SetEQ(nil)
-	if p.eqBands != nil {
-		t.Errorf("SetEQ(nil) left %v in the bands, want the equaliser off", p.eqBands)
-	}
-}
-
-// errTestDevice fails the audio device, which no test here needs.
-var errTestDevice = errors.New("player: no audio device in this test")

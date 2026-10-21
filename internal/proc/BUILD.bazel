@@ -7,8 +7,6 @@ go_library(
         "proc.go",
         "proc_unix.go",
         "proc_windows.go",
-        "window_unix.go",
-        "window_windows.go",
     ],
     importpath = "github.com/elianiva/meiro/internal/proc",
     visibility = ["//:__subpackages__"],

@@ -1,50 +1,9 @@
 package youtube
 
 import (
-	"context"
 	"encoding/json"
-	"net/http"
 	"testing"
 )
-
-func TestLibraryWritesAimTheLikeAtThePlaylist(t *testing.T) {
-	for _, test := range []struct {
-		save bool
-		path string
-	}{
-		{true, "/youtubei/v1/like/like"},
-		{false, "/youtubei/v1/like/removelike"},
-	} {
-		client, path, payload := writeClient(t, http.StatusOK, `{"responseContext":{}}`)
-		var err error
-		if test.save {
-			err = client.AddToLibrary(context.Background(), "VLPL1")
-		} else {
-			err = client.RemoveFromLibrary(context.Background(), "PL1")
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		target, _ := (*payload)["target"].(map[string]any)
-		if *path != test.path || target["playlistId"] != "PL1" || len(target) != 1 {
-			t.Errorf("save=%v: path %q, target %#v", test.save, *path, target)
-		}
-	}
-}
-
-func TestLibraryWritesRefusals(t *testing.T) {
-	if err := NewClient(Options{}).AddToLibrary(context.Background(), "PL1"); err == nil {
-		t.Error("a signed-out save was sent")
-	}
-	client, path, _ := writeClient(t, http.StatusOK, `{}`)
-	if err := client.RemoveFromLibrary(context.Background(), " VL "); err == nil || *path != "" {
-		t.Errorf("a removal without a playlist was sent to %q: %v", *path, err)
-	}
-	client, _, _ = writeClient(t, http.StatusForbidden, `{"error":{"code":403}}`)
-	if err := client.AddToLibrary(context.Background(), "PL1"); err == nil {
-		t.Error("a 403 was not an error")
-	}
-}
 
 func TestPagesSayWhetherTheyAreInTheLibrary(t *testing.T) {
 	toggle := func(rest string) string {

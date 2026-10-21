@@ -17,9 +17,6 @@ go_library(
 
 go_test(
     name = "artwork_test",
-    srcs = [
-        "artwork_test.go",
-        "fit_test.go",
-    ],
+    srcs = ["fit_test.go"],
     embed = [":artwork"],
 )

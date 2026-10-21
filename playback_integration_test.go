@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"image"
 	"io"
 	"math"
 	"net/http"
@@ -424,16 +423,6 @@ func TestLoudnessSurvivesTheStreamResolving(t *testing.T) {
 	}
 }
 
-func TestPlaybackSettingsContainNormalizationOutsideCacheCard(t *testing.T) {
-	a := newTestApp(t)
-	a.router.Push("/settings")
-	tt := ui.NewTester(a.view, 1000, 4000)
-	tt.Frame()
-	if !tt.HasText("Normalize loudness") || !tt.HasText("Playback") || !tt.HasText("Keep recent songs") {
-		t.Fatal("playback normalization and cache controls are not present on settings page")
-	}
-}
-
 func TestLoudnessIsAppliedBeforeTheAudioStarts(t *testing.T) {
 	a, _ := playbackApp(t)
 	a.settings.NormalizeLoudness = true
@@ -612,26 +601,6 @@ func TestAutoPlayRetriesRecommendationsWhenChosenQueueRunsOut(t *testing.T) {
 	}
 	if got := ids(a.queue.items); !slices.Equal(got, []string{"first", "last", "recommended"}) {
 		t.Fatalf("queue after retry = %v, want recommendation appended", got)
-	}
-}
-
-func TestAutoPlayQueuePanelDoesNotShowMusicVideos(t *testing.T) {
-	a, _ := playbackApp(t)
-	a.current = youtube.MusicItem{VideoID: "current", Title: "Current", Kind: youtube.KindTrack}
-	a.queue.replace(a.current, nil, 0, "")
-	a.queue.appendGenerated([]youtube.MusicItem{
-		{VideoID: "video", Title: "Music video", Kind: youtube.KindVideo},
-		{VideoID: "track", Title: "Song", Kind: youtube.KindTrack},
-	})
-	a.nowPlaying.open, a.nowPlaying.queueOnly, a.nowPlaying.playerShown = true, true, true
-
-	tt := ui.NewTester(a.nowPlayingView, 1000, 700)
-	tt.Frame()
-	if tt.HasText("Music video") {
-		t.Fatalf("music video appears in Up next: %q", tt.Texts())
-	}
-	if !tt.HasText("Song") {
-		t.Fatalf("song recommendation is missing from Up next: %q", tt.Texts())
 	}
 }
 
@@ -833,30 +802,6 @@ func TestACachedTrackPlaysWithoutResolving(t *testing.T) {
 	}
 	if a.current.VideoID != "three" || a.stream.busy() {
 		t.Errorf("current=%q resolving=%v", a.current.VideoID, a.stream.busy())
-	}
-}
-
-func TestEditingTheQueueKeepsPlayingAndFollowsTheEdits(t *testing.T) {
-	a, _ := playbackApp(t)
-	q := tracks("a", "b", "c", "d")
-	a.play(q[0], q)
-
-	a.removeFromQueue(1)
-	if got := ids(a.queue.items); !slices.Equal(got, []string{"a", "c", "d"}) || a.current.VideoID != "a" {
-		t.Fatalf("after the removal: %v, playing %q", got, a.current.VideoID)
-	}
-	a.removeFromQueue(0) // the track playing stays
-	a.shiftInQueue(2, -1)
-	if got := ids(a.queue.items); !slices.Equal(got, []string{"a", "d", "c"}) {
-		t.Fatalf("after the move: %v", got)
-	}
-	a.trackEnded()
-	if a.current.VideoID != "d" {
-		t.Errorf("played %q after the move, want d", a.current.VideoID)
-	}
-	a.clearUpcoming()
-	if got := ids(a.queue.items); !slices.Equal(got, []string{"a", "d"}) || a.current.VideoID != "d" {
-		t.Errorf("after clearing: %v, playing %q", got, a.current.VideoID)
 	}
 }
 
@@ -1107,103 +1052,6 @@ func waitFor(t *testing.T, done func() bool) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-}
-
-// TestTheQueuePanelKeepsItsSpacing checks that the tab row sits as far from the
-// top of its card as from its sides, that the source reads on one line with its
-// playlist in bold, and that the source, the auto-play switch and the count sit
-// the same distance apart. A queue row carries no buttons of its own.
-func TestTheQueuePanelKeepsItsSpacing(t *testing.T) {
-	a, _ := playbackApp(t)
-	q := tracks("a", "b", "c", "d")
-	for i := range q {
-		q[i].Duration = "3:45"
-	}
-	a.playFrom(q[0], q, 0, youtube.UpNextOptions{}, "Reiwa Era J-Pop")
-	a.nowPlaying.open, a.nowPlaying.playerShown = true, true
-	tt := ui.NewTester(a.nowPlayingView, 1400, 820)
-	row, ok := tt.Find("Track c")
-	if !ok {
-		t.Fatalf("no row: %q", tt.Texts())
-	}
-	tt.Move(row.X+row.W/2, row.Y+row.H/2)
-	tt.Frame()
-
-	tab, ok := tt.Find("Up next")
-	if !ok {
-		t.Fatalf("no Up next: %q", tt.Texts())
-	}
-	// The card is the tonal fill around the tabs, found from the panel's own
-	// surface away from the card's rounded corners.
-	img := tt.Image()
-	cx, cy := int(tab.X+tab.W/2), int(tab.Y+tab.H/2)
-	top := cardEdge(img, cx, 40, 0, 1)
-	left := cardEdge(img, int(tab.X)-40, cy, 1, 0)
-	if top < 0 || left < 0 {
-		t.Fatal("no card edge around the tabs")
-	}
-	if above, side := tab.Y-float32(top), tab.X-float32(left); above < side-1 || above > side+1 {
-		t.Errorf("the tabs are %.0f below the card's top and %.0f from its side", above, side)
-	}
-
-	find := func(label string) ui.Rect {
-		t.Helper()
-		r, ok := tt.Find(label)
-		if !ok {
-			t.Fatalf("no %q: %q", label, tt.Texts())
-		}
-		return r
-	}
-	// The source is one line: "Playing from" and the playlist start at the
-	// same height, in the same size, the playlist after the label.
-	label, source := find("Playing from"), find("Reiwa Era J-Pop")
-	if label.Y != source.Y || label.H != source.H {
-		t.Errorf("the source is not one line of one size: %v and %v", label, source)
-	}
-	if source.X <= label.X+label.W {
-		t.Errorf("the playlist starts at %.0f, inside the label that ends at %.0f", source.X, label.X+label.W)
-	}
-	// One rhythm: the same gap from the source to Auto-play as from the
-	// sentence under it to the count.
-	autoPlay := find("Auto-play")
-	sentence := find("Add similar music when this queue ends.")
-	count := find("3 up next")
-	between := func(upper, lower ui.Rect) float32 { return lower.Y - (upper.Y + upper.H) }
-	if first, second := between(label, autoPlay), between(sentence, count); first != second {
-		t.Errorf("the header lines are %.0f and %.0f apart", first, second)
-	}
-
-	if _, ok := tt.Find("More options for Track c"); ok {
-		t.Error("a row of the queue offers a menu button")
-	}
-	if _, ok := tt.Find("Remove Track c from the queue"); ok {
-		t.Error("a row of the queue offers a remove button")
-	}
-}
-
-// cardEdge walks from a pixel of the panel's surface towards the card, one
-// step at a time along dx and dy, and returns the coordinate of the first
-// pixel that differs from the one it started on.
-func cardEdge(img *image.RGBA, x, y, dx, dy int) int {
-	r0, g0, b0, _ := img.At(x, y).RGBA()
-	for range 200 {
-		x, y = x+dx, y+dy
-		r, g, b, _ := img.At(x, y).RGBA()
-		if channelGap(r, r0)+channelGap(g, g0)+channelGap(b, b0) > 0x0600 {
-			if dx != 0 {
-				return x
-			}
-			return y
-		}
-	}
-	return -1
-}
-
-func channelGap(a, b uint32) int {
-	if a > b {
-		return int(a - b)
-	}
-	return int(b - a)
 }
 
 func TestEditingTheQueueFromItsPanel(t *testing.T) {

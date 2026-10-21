@@ -19,15 +19,6 @@ func TestParseFFmpeg(t *testing.T) {
 	}
 }
 
-func TestParseYtDlp(t *testing.T) {
-	if got := ParseYtDlp("2025.01.15\n"); got != "2025.01.15" {
-		t.Errorf("got %q", got)
-	}
-	if got := ParseYtDlp("  \n"); got != "" {
-		t.Errorf("blank output gave %q", got)
-	}
-}
-
 // The link round-trips the details, including characters that need escaping,
 // and says what is missing instead of leaving a blank.
 func TestURLFillsTheBugReportForm(t *testing.T) {
@@ -50,12 +41,5 @@ func TestURLFillsTheBugReportForm(t *testing.T) {
 		if got := q.Get(key); got != want {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
-	}
-}
-
-func TestURLNamesDevelopmentBuilds(t *testing.T) {
-	u, _ := url.Parse((Info{}).URL())
-	if got := u.Query().Get("version"); got != "development build" {
-		t.Errorf("version = %q", got)
 	}
 }

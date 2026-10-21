@@ -65,8 +65,8 @@ var settingsRows = []settingsRow{
 	{key: "logs", card: (*app).logsCard},
 }
 
-// settingsPage is where the user chooses the colours of the app and manages
-// the account. Every control here restyles the whole window as it is used.
+// settingsPage is where the user chooses how the app looks, sounds and plays,
+// and manages the account, the caches, Last.fm and the shortcuts.
 //
 // The rows are the rows of a list, so only the ones in view are built, laid
 // out and painted: the page is long, and scrolling it rebuilds the frame.
@@ -462,5 +462,52 @@ func (a *app) chooseAudioCacheDirectory() {
 		}
 		a.cacheDirectoryText, a.cacheDirError = c.root, ""
 		a.saveSettings()
+	})
+}
+
+// desktopCard holds the switches that tie Meiro to the rest of the system:
+// notifications, the tray, the global shortcut and starting at login.
+func (a *app) desktopCard(c *ui.Context) {
+	a.settingsCard(c, "Desktop", m3.IconNotifications, func() {
+		ui.Column(c).Gap(4).Children(func() {
+			a.desktopSwitch(c, "Track notifications", "Announce each new track. Clicking one brings Meiro back.",
+				a.settings.NotifyTrack, func(on bool) { a.settings.NotifyTrack = on })
+			a.desktopSwitch(c, "Menu bar icon", "Keep Meiro in the menu bar with play, next and quit.",
+				a.settings.ShowTray, func(on bool) {
+					a.settings.ShowTray = on
+					a.syncDesktop()
+				})
+			a.desktopSwitch(c, "Close to tray", "Closing the window keeps Meiro running in the tray instead of quitting.",
+				a.settings.CloseToTray != nil && *a.settings.CloseToTray, func(on bool) {
+					a.answerClose(on, true)
+				})
+			a.desktopSwitch(c, "Global shortcut", "Play or pause from anywhere with "+toggleShortcut+".",
+				a.settings.GlobalShortcut, func(on bool) {
+					a.settings.GlobalShortcut = on
+					a.syncShortcut()
+				})
+			a.desktopSwitch(c, "Discord Rich Presence", "Share the track, artist, cover and elapsed time while music plays. The status clears when playback pauses or stops.",
+				a.settings.DiscordPresence, func(on bool) {
+					a.settings.DiscordPresence = on
+					a.syncSystemMedia()
+				})
+			a.desktopSwitch(c, "Open at login", "Start Meiro when you log in.",
+				a.settings.OpenAtLogin, func(on bool) {
+					a.settings.OpenAtLogin = on
+					a.desktop.setOpenAtLogin(on)
+				})
+		})
+	})
+}
+
+// desktopSwitch is one system-integration row: a label and a switch that
+// saves through apply.
+func (a *app) desktopSwitch(c *ui.Context, title, body string, on bool, apply func(bool)) {
+	ui.Row(c).Gap(16).AlignItems(ui.Center).Padding(8, 0).Children(func() {
+		settingLabel(c, title, body).Grow(1)
+		if m3.Switch(c, &on, title).Changed() {
+			apply(on)
+			a.saveSettings()
+		}
 	})
 }

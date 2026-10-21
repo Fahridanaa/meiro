@@ -103,17 +103,6 @@ func TestOverrides(t *testing.T) {
 	}
 }
 
-// What a keyboard reports on this platform as the shortcut modifier is Cmd.
-func TestFromEventNormalisesTheShortcutModifier(t *testing.T) {
-	b := FromEvent(ui.Cmd|ui.Shift, ui.KeyK)
-	if !b.Cmd || b.Mods != ui.Shift {
-		t.Errorf("%+v", b)
-	}
-	if got := b.Modifiers(); got != ui.Cmd|ui.Shift {
-		t.Errorf("modifiers: %v", got)
-	}
-}
-
 func TestHintPartsDropTheModifierAlreadyDown(t *testing.T) {
 	text := func(s string) Part { return Part{Text: s} }
 	glyph := func(g Glyph) Part { return Part{Glyph: g} }

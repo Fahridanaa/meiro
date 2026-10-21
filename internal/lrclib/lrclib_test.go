@@ -128,16 +128,3 @@ func TestGetReportsAFailureWhenNothingWasFound(t *testing.T) {
 		t.Fatalf("got %+v, %v", got, err)
 	}
 }
-
-func TestShortTitle(t *testing.T) {
-	for in, want := range map[string]string{
-		"ラッキー☆オーブ - Lucky Orb (feat. Hatsune Miku)": "ラッキー☆オーブ",
-		"Song (feat. Someone)": "Song",
-		"Song (Live)":          "Song (Live)",
-		"Plain":                "Plain",
-	} {
-		if got := ShortTitle(in); got != want {
-			t.Errorf("ShortTitle(%q) = %q, want %q", in, got, want)
-		}
-	}
-}

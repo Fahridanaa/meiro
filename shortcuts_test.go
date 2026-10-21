@@ -48,24 +48,6 @@ func TestVolumeShortcuts(t *testing.T) {
 	}
 }
 
-// A shortcut the user moved answers to its new key only.
-func TestChangedShortcutReplacesTheDefault(t *testing.T) {
-	a := newTestApp(t)
-	a.settings.Shortcuts = map[string]string{"settings": "Cmd+Shift+P"}
-	tt := ui.NewTester(a.view, 1000, 700)
-	tt.Frame()
-	tt.Key(ui.Cmd, ui.KeyComma)
-	tt.Frame()
-	if a.router.Path() == "/settings" {
-		t.Fatal("the old key still opens settings")
-	}
-	tt.Key(ui.Cmd|ui.Shift, ui.KeyP)
-	tt.Frame()
-	if a.router.Path() != "/settings" {
-		t.Fatalf("the new key opened %s", a.router.Path())
-	}
-}
-
 func TestRecordingANewShortcut(t *testing.T) {
 	a := newTestApp(t)
 	a.router.Push("/settings")

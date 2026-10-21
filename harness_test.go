@@ -32,12 +32,10 @@ var (
 	searches         atomic.Int32
 	searchesMore     atomic.Int32
 	homeMoreRequests atomic.Int32
-	// playlistMoreRequests counts the requests for a playlist's suggestions.
-	playlistMoreRequests atomic.Int32
-	searchAsked          atomic.Value
-	fakePageID           atomic.Value
-	libraryLoads         atomic.Int32
-	playlistCreates      atomic.Int32
+	searchAsked      atomic.Value
+	fakePageID       atomic.Value
+	libraryLoads     atomic.Int32
+	playlistCreates  atomic.Int32
 	// playlistDeletes counts the playlists the fake has been asked to delete.
 	playlistDeletes atomic.Int32
 	// likeWrites counts the like writes the fake has been asked for, and
@@ -113,7 +111,6 @@ func (fakeMusic) RoundTrip(request *http.Request) (*http.Response, error) {
 		homeMoreRequests.Add(1)
 		reply = homeMoreResponse
 	case strings.Contains(asked, `"continuation":"playlist-more"`):
-		playlistMoreRequests.Add(1)
 		reply = playlistSuggestionsResponse
 	case strings.Contains(asked, "FEmusic_listening_review"):
 		reply = recapResponse
@@ -375,7 +372,6 @@ func resetFakes() {
 	playlistDeletes.Store(0)
 	subscribeWrites.Store(0)
 	homeMoreRequests.Store(0)
-	playlistMoreRequests.Store(0)
 	refuseWrites.Store(false)
 	fakeLikeState.Store("")
 	fakeLibrary.Clear()
@@ -704,9 +700,7 @@ func libraryPage() string {
 
 // memoryStore is a cookie store held in memory.
 type memoryStore struct {
-	cookie    string
-	deleteErr error
-	onSave    func()
+	cookie string
 }
 
 func (m *memoryStore) Load(context.Context) (string, error) {
@@ -718,16 +712,10 @@ func (m *memoryStore) Load(context.Context) (string, error) {
 
 func (m *memoryStore) Save(_ context.Context, cookie string) error {
 	m.cookie = cookie
-	if m.onSave != nil {
-		m.onSave()
-	}
 	return nil
 }
 
 func (m *memoryStore) Delete(context.Context) error {
-	if m.deleteErr != nil {
-		return m.deleteErr
-	}
 	m.cookie = ""
 	return nil
 }

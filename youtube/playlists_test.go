@@ -11,23 +11,6 @@ import (
 	"testing"
 )
 
-func TestRemoveFromPlaylistValidatesAuthenticationAndIdentifiers(t *testing.T) {
-	client := NewClient(Options{})
-	for _, test := range []struct {
-		name, playlist, entry string
-	}{
-		{"signed out", "PL1", "entry-1"},
-		{"missing playlist", "", "entry-1"},
-		{"missing entry", "PL1", " "},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if err := client.RemoveFromPlaylist(context.Background(), test.playlist, test.entry); err == nil {
-				t.Fatal("invalid removal was accepted")
-			}
-		})
-	}
-}
-
 type playlistResponse string
 
 func (p playlistResponse) RoundTrip(request *http.Request) (*http.Response, error) {

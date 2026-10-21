@@ -3,9 +3,8 @@ package main
 import (
 	"cmp"
 	"slices"
-	"sort"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/elianiva/meiro/youtube"
 )
@@ -94,26 +93,28 @@ func sortPlaylistSections(sections []youtube.MusicSection, s playlistSort) []you
 		}
 		return sorted
 	}
-	for i, section := range sorted {
-		tracks := make([]youtube.MusicItem, 0, len(section.Items))
-		for _, item := range section.Items {
+	// A field sorts the tracks within their own section: a section is a shelf
+	// YouTube Music placed, and its heading names what is in it. The keys are
+	// worked out once per track rather than once per comparison, which keeps
+	// a long playlist's sort within a frame.
+	var keys []sortKey
+	for i, section := range sections {
+		keys = keys[:0]
+		for j, item := range section.Items {
 			if item.IsTrack() {
-				tracks = append(tracks, item)
+				keys = append(keys, newSortKey(item, s.field, j))
 			}
 		}
-		// A field sorts the tracks within their own section: a section is a
-		// shelf YouTube Music placed, and its heading names what is in it.
-		sort.SliceStable(tracks, func(i, j int) bool {
-			order := comparePlaylistItems(tracks[i], tracks[j], s.field)
+		slices.SortStableFunc(keys, func(x, y sortKey) int {
 			if s.desc {
-				return order > 0
+				return y.compare(x)
 			}
-			return order < 0
+			return x.compare(y)
 		})
 		track := 0
-		for j, item := range sorted[i].Items {
+		for j, item := range section.Items {
 			if item.IsTrack() {
-				sorted[i].Items[j] = tracks[track]
+				sorted[i].Items[j] = section.Items[keys[track].at]
 				track++
 			}
 		}
@@ -121,43 +122,39 @@ func sortPlaylistSections(sections []youtube.MusicSection, s playlistSort) []you
 	return sorted
 }
 
-func comparePlaylistItems(left, right youtube.MusicItem, field playlistSortField) int {
-	var order int
-	switch field {
-	case playlistSortOriginal:
-		return 0
-	case playlistSortTitle:
-		order = strings.Compare(strings.ToLower(left.Title), strings.ToLower(right.Title))
-	case playlistSortArtist:
-		order = strings.Compare(strings.ToLower(playlistArtist(left)), strings.ToLower(playlistArtist(right)))
-	case playlistSortDuration:
-		order = cmp.Compare(durationSeconds(left.Duration), durationSeconds(right.Duration))
-	}
-	if order != 0 {
-		return order
-	}
-	return strings.Compare(strings.ToLower(left.Title), strings.ToLower(right.Title))
+// sortKey is what a track is ordered by, worked out once: by the field, then
+// by title, whatever their case. at is the track's place in its section.
+type sortKey struct {
+	field   string
+	seconds time.Duration
+	title   string
+	at      int
 }
 
-// playlistArtist follows the text convention already used by the parser:
-// artist, album and duration are separated by " • ".
+func newSortKey(item youtube.MusicItem, field playlistSortField, at int) sortKey {
+	k := sortKey{title: strings.ToLower(item.Title), at: at}
+	switch field {
+	case playlistSortArtist:
+		k.field = strings.ToLower(playlistArtist(item))
+	case playlistSortDuration:
+		k.seconds = parseDuration(item.Duration)
+	case playlistSortOriginal, playlistSortTitle:
+	}
+	return k
+}
+
+func (k sortKey) compare(other sortKey) int {
+	return cmp.Or(
+		strings.Compare(k.field, other.field),
+		cmp.Compare(k.seconds, other.seconds),
+		strings.Compare(k.title, other.title),
+	)
+}
+
+// playlistArtist is the artist a track is sorted under: the start of its
+// byline, up to the first " • ", so that a track whose byline links no artist
+// still sorts by the name it shows.
 func playlistArtist(item youtube.MusicItem) string {
 	artist, _, _ := strings.Cut(item.Subtitle, " • ")
 	return strings.TrimSpace(artist)
-}
-
-func durationSeconds(value string) int {
-	parts := strings.Split(strings.TrimSpace(value), ":")
-	if len(parts) == 0 || len(parts) > 3 {
-		return 0
-	}
-	seconds := 0
-	for _, part := range parts {
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 0 {
-			return 0
-		}
-		seconds = seconds*60 + n
-	}
-	return seconds
 }

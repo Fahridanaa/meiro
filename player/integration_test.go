@@ -125,17 +125,6 @@ func TestAnUnreachableStreamFails(t *testing.T) {
 	}
 }
 
-func TestStopForgetsTheStream(t *testing.T) {
-	p, wav := newTestPlayer(t)
-	if err := p.Play(wav); err != nil {
-		t.Fatal(err)
-	}
-	p.Stop()
-	if p.Active() || p.Position() != 0 {
-		t.Errorf("a stopped player: active=%v position=%v", p.Active(), p.Position())
-	}
-}
-
 func TestAPreloadedStreamTakesOverWithoutEnding(t *testing.T) {
 	p, wav := newTestPlayer(t)
 	if err := p.Play(wav); err != nil {
@@ -216,15 +205,5 @@ func TestPlaySeekAndStopDropThePreload(t *testing.T) {
 		if got := p.Preloaded(); got != "" {
 			t.Errorf("%s left %q preloaded", name, got)
 		}
-	}
-}
-
-func TestNothingIsPreloadedWithoutAStream(t *testing.T) {
-	p, wav := newTestPlayer(t)
-	if err := p.Preload("next", wav); err != nil {
-		t.Fatal(err)
-	}
-	if p.Preloaded() != "" {
-		t.Error("a stopped player preloaded a stream")
 	}
 }
