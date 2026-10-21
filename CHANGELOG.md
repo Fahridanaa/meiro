@@ -35,6 +35,9 @@ and this project adheres to
 - **A context menu opens again where it was closed.** The mark a menu left where
   the pointer pressed took the next right click on that spot for itself, so a
   card's or a page's menu could be opened only once until the page changed.
+- **A playlist write YouTube refuses is written to the log in full**, for the
+  add and the remove path, so a refusal that the player bar shows as a line can
+  be read whole.
 
 ## [0.4.3] - 2026-10-20
 
