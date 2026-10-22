@@ -132,6 +132,7 @@ func (a *app) onNavigate() {
 	// belongs to the visit, not the page. A page kept from before rebuilds
 	// its rows, since the search is part of the rows' key.
 	a.detailFilter, a.detailSearchOpen, a.detailSearchHadFocus, a.detailSort, a.detailSortOpen = "", false, false, playlistSort{}, false
+	a.closeSettingsSearch()
 	a.pageLoad.stop()
 	a.pageMore.stop()
 	a.nowPlaying.open, a.nowPlaying.closing = false, false

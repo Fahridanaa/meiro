@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Palette options have a uniform size, and hover outlines no longer shift their contents.** Colour swatches also keep their contents in place when hovered.
 
+### Added
+
+- **Search Settings.** A playlist-style search button filters settings in place, including the Discord Rich Presence option.
+
 ## [0.4.6] - 2026-10-22
 
 ### Fixed

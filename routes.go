@@ -84,9 +84,9 @@ type route struct {
 	// grid lays the page's cards out in lines that wrap, rather than in
 	// shelves that scroll sideways.
 	grid bool
-	// bare pages are the app's own, not YouTube Music's: the top bar names
-	// them alone, without the search, which finds music and nothing here, and
-	// the account, which the settings already offer as a card.
+	// bare pages are the app's own, not YouTube Music's: the top bar omits the
+	// search field, which finds music and nothing here, and the account, which
+	// the settings already offer as a card. Settings has its own local filter.
 	bare bool
 }
 

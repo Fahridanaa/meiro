@@ -105,41 +105,129 @@ func TestEveryPageLoadsAndDraws(t *testing.T) {
 	}
 }
 
-// The top bar searches YouTube Music and holds the account, and neither finds
-// anything on the settings pages: they show the account as their first card,
-// so their bar names the page alone.
-func TestSettingsPagesLeaveTheMusicSearchOutOfTheTopBar(t *testing.T) {
+// Settings' search button opens a local filter without changing pages.
+func TestSettingsSearchFiltersSettingsInPlace(t *testing.T) {
 	a := newTestApp(t)
 	a.router.Push("/home")
 	tt := ui.NewTester(a.view, 1000, 700)
 	tt.Frame()
-	// A page of YouTube Music has both, and the account is at the bar's end.
 	account, ok := tt.Find("Account")
 	if !ok {
 		t.Fatalf("the home page has no account button: %q", tt.Texts())
 	}
 	if _, ok := tt.Find(searchPlaceholder); !ok {
-		t.Fatalf("the home page has no music search: %q", tt.Texts())
+		t.Fatalf("the home page has no global music search: %q", tt.Texts())
 	}
-
-	// The settings and their stats are the app's own pages, not YouTube
-	// Music's: their bar names the page and stops there.
-	for _, path := range []string{"/settings", "/stats"} {
-		a.router.Push(path)
-		tt.Frame()
-		if _, ok := tt.Find(searchPlaceholder); ok {
-			t.Errorf("%s shows the music search in its top bar: %q", path, tt.Texts())
-		}
-		if r, ok := tt.Find("Account"); ok && r == account {
-			t.Errorf("%s shows the account in its top bar, at %v", path, r)
-		}
-	}
-
-	// The settings show the account among their rows instead.
 	a.router.Push("/settings")
-	tt.Frame()
+	for range 3 {
+		tt.Frame()
+	}
+	if _, ok := tt.Find(searchPlaceholder); ok {
+		t.Fatalf("Settings shows the global music search: %q", tt.Texts())
+	}
+	if r, ok := tt.Find("Account"); ok && r == account {
+		t.Fatalf("Settings shows the account in its top bar at %v", r)
+	}
+	if _, ok := tt.Find("Search settings"); !ok {
+		t.Fatalf("Settings has no local search button: %q", tt.Texts())
+	}
 	if !tt.HasText("Sign in") {
-		t.Errorf("the settings have no account card: %q", tt.Texts())
+		t.Fatalf("Settings has no account card: %q", tt.Texts())
+	}
+	if err := tt.Click("Search settings"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	if a.router.Path() != "/settings" {
+		t.Fatalf("opening settings search navigated to %q", a.router.Path())
+	}
+	if _, ok := tt.Find("Close the search"); !ok {
+		t.Fatalf("the local search field did not open (open %v): %q", a.settingsSearch.open, tt.Texts())
+	}
+	if field, ok := tt.Find("Search settings"); !ok || field.W < 300 {
+		t.Fatalf("the expanded field is missing or too narrow: %v, %q", field, tt.Texts())
+	}
+	tt.Type("Discord")
+	tt.Frame()
+	if !tt.HasText("Discord Rich Presence") {
+		t.Errorf("searching Discord hid its setting: %q", tt.Texts())
+	}
+	if tt.HasText("Normalize loudness") {
+		t.Errorf("searching Discord left unrelated sound settings visible: %q", tt.Texts())
+	}
+	for _, tc := range []struct {
+		query string
+		want  string
+	}{
+		{query: "colour", want: "Colour"},
+		{query: "color", want: "Colour"},
+		{query: "palette", want: "Palette"},
+		{query: "hue", want: "Hue"},
+		{query: "artwork", want: "Colour from artwork"},
+	} {
+		if err := tt.Click("Clear search"); err != nil {
+			t.Fatal(err)
+		}
+		if err := tt.Click("Search settings"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Type(tc.query)
+		tt.Frame()
+		if !tt.HasText(tc.want) {
+			t.Errorf("searching %q did not show %q: %q", tc.query, tc.want, tt.Texts())
+		}
+		if tt.HasText("Discord Rich Presence") {
+			t.Errorf("searching %q left the unrelated Discord setting visible: %q", tc.query, tt.Texts())
+		}
+	}
+
+	tt.Type(" unmatched")
+	tt.Frame()
+	if !tt.HasText("No settings found") {
+		t.Errorf("an unmatched query has no empty state: %q", tt.Texts())
+	}
+	if err := tt.Click("Clear search"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if !tt.HasText("Sign in") || tt.HasText("No settings found") {
+		t.Errorf("clearing the query did not restore Settings: %q", tt.Texts())
+	}
+	if !a.settingsSearch.open {
+		t.Fatalf("clearing the query closed Settings search: %#v; %q", a.settingsSearch, tt.Texts())
+	}
+	if err := tt.Click("Close the search"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(300 * time.Millisecond)
+	if a.settingsSearch.open || a.settingsSearch.query != "" {
+		t.Errorf("closing left settings search open with query %q", a.settingsSearch.query)
+	}
+	if _, ok := tt.Find("Search settings"); !ok {
+		t.Errorf("the settings search button did not return: %q", tt.Texts())
+	}
+
+	// The same compact control appears nowhere on Stats; global music search
+	// remains available on a music page.
+	a.router.Push("/stats")
+	for range 3 {
+		tt.Frame()
+	}
+	if _, ok := tt.Find("Search settings"); ok {
+		t.Errorf("Stats shows the Settings filter: %q", tt.Texts())
+	}
+	if r, ok := tt.Find("Account"); ok && r == account {
+		t.Errorf("Stats shows the account in its top bar at %v", r)
+	}
+	a.router.Push("/home")
+	for range 3 {
+		tt.Frame()
+	}
+	if _, ok := tt.Find(searchPlaceholder); !ok {
+		t.Errorf("the home page lost global music search: %q", tt.Texts())
+	}
+	if r, ok := tt.Find("Account"); !ok || r != account {
+		t.Errorf("the home page account button moved from %v to %v", account, r)
 	}
 }
 

@@ -223,8 +223,10 @@ func (a *app) topBar(c *ui.Context) {
 		m3.EmphasizedText(c, m3.HeadlineMedium, title).SingleLine().TextColor(sc.OnSurface).Shrink(0)
 		ui.Spacer(c)
 		if r.bare {
-			// The settings pages have nothing for the search to find, and
-			// show the account themselves.
+			// Settings has a local filter; Stats has no search entry point.
+			if r.id == routeSettings {
+				a.settingsSearchBar(c)
+			}
 			return
 		}
 		var bar ui.Element

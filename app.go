@@ -96,6 +96,8 @@ type app struct {
 	// searchField and detailSearchField move the keyboard to the top bar's
 	// search and to the playlist page's, where Focus waits while one is hidden.
 	searchField, detailSearchField ui.Handle
+	// settingsSearch is the filter in the Settings top bar.
+	settingsSearch settingsSearchState
 	// writing holds the writes to a like, the library or a subscription that
 	// are out, by what they change, so that one is not asked for twice.
 	writing  map[string]bool

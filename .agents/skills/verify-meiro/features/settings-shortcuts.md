@@ -12,7 +12,7 @@ A user changes the theme and equaliser, rebinds shortcuts, clears history, opens
 - `settings-history` clears listening history with `Clear history`, then `Delete all plays`.
 - `settings-support` opens `Open logs folder` and `Report a problem` with a prefilled issue.
 - `settings-lastfm` connects, pauses and disconnects Last.fm, and scrobbles qualifying plays.
-- `settings-top-bar` leaves the music search and the account out of the top bar of the settings pages, and keeps both on a page of YouTube Music.
+- `settings-top-bar` keeps global music search and the account out of the app-owned top bar; Settings has a playlist-style search button that filters settings in place, while Stats has no search entry point.
 - `settings-progress` keeps the wavy progress bar on by default and no longer offers a preference or performance warning in Settings.
 
 ## How to get to it (user POV)
@@ -31,7 +31,7 @@ Preconditions:
 - **Restart.** Build a second `newTestApp(t)` and `settings.Load(path)`. The mode and seed came back.
 - **Shortcut.** Mirror `TestRecordingANewShortcut`. Press the key with `tt.Key(mods, key)`, never by calling the action.
 - **Keyboard-only navigation.** Mirror `TestKeyboardMenusKeepFocusAndRunActions`, `TestKeyboardPlayerTabsAndQueue`, `TestKeyboardOpensTheCoverMenu` and `TestKeyboardVolumeIsSaved` in `shortcuts_test.go`. The `tabTo` helper only sends Tab; verify the next action's focus explicitly. Test volume at 920 and 1280 pixels: the narrow popup must survive focus moving from Mute to Volume. `TestSeekingMovesThePlayerOffTheMainThread` checks Home and Right against the real decoder position, not only the scrubber value.
-- **Top bar.** Verified by `TestSettingsPagesLeaveTheMusicSearchOutOfTheTopBar`. `tt.Find(searchPlaceholder)` is absent on `/settings` and `/stats`; the account button there is only the page's own card; `/home` keeps both. The account stays one click away as the settings' first card.
+- **Top bar.** Verified by `TestSettingsSearchFiltersSettingsInPlace`. `/settings` has a `Search settings` icon button that expands into a local filter; searching `Discord` shows Discord Rich Presence without unrelated cards, an unmatched query shows an empty state, and clearing restores the full list. `/stats` has no search entry point. Global music search remains on `/home`.
 - **Progress bar.** `TestSettingsDoNotOfferWavyProgressPreference` confirms Settings no longer offers the wave toggle or its warning. All player scrubbers use the shared `a.scrubber` with the wave enabled.
 - **History.** `p.click("Clear history", "confirm")`, `p.click("Delete all plays", "cleared")`. `a.history` is empty and the file on disk is too.
 - **Last.fm.** Mirror `TestConnectingPausingAndDisconnectingInSettings`. Set `MEIRO_LASTFM_API_KEY` and `MEIRO_LASTFM_SECRET` in the test environment only when the test needs a key, with a fake Last.fm transport.

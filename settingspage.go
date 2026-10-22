@@ -36,33 +36,114 @@ var swatches = []struct{ name, hex string }{
 type settingsRow struct {
 	key     string
 	heading string                      // set for a heading
+	search  string                      // words the card answers
 	card    func(a *app, c *ui.Context) // set for a card
+}
+
+type settingsSearchState struct {
+	query string
+	open  bool
+	field ui.Handle
 }
 
 // settingsRows are the rows of the settings page, top to bottom. Cards that
 // answer the same question sit under one heading.
 var settingsRows = []settingsRow{
 	{key: "h-account", heading: "Account"},
-	{key: "account", card: (*app).accountCard},
-	{key: "lastfm", card: (*app).lastFMCard},
+	{key: "account", search: "sign in profile account session", card: (*app).accountCard},
+	{key: "lastfm", search: "last.fm scrobbling music service", card: (*app).lastFMCard},
 
 	{key: "h-look", heading: "Appearance and sound"},
-	{key: "appearance", card: (*app).appearanceCard},
-	{key: "sound", card: (*app).soundCard},
+	{key: "appearance", search: "theme appearance system light dark colour color colours colors violet indigo blue sky teal green lime amber orange red rose orchid hue palette tonal spot vibrant expressive neutral monochrome artwork dynamic", card: (*app).appearanceCard},
+	{key: "sound", search: "sound audio normalize loudness equaliser volume", card: (*app).soundCard},
 
 	{key: "h-system", heading: "System"},
-	{key: "desktop", card: (*app).desktopCard},
-	{key: "keyboard", card: (*app).keyboardCard},
+	{key: "desktop", search: "desktop linux notifications discord rich presence activity status", card: (*app).desktopCard},
+	{key: "keyboard", search: "keyboard shortcuts keys", card: (*app).keyboardCard},
 
 	{key: "h-data", heading: "Storage and privacy"},
-	{key: "cache", card: (*app).playbackCacheCard},
-	{key: "history", card: (*app).historyCard},
+	{key: "cache", search: "storage cache playback downloads", card: (*app).playbackCacheCard},
+	{key: "history", search: "privacy history listening plays", card: (*app).historyCard},
 
 	{key: "h-about", heading: "About and support"},
-	{key: "updates", card: (*app).updatesCard},
-	{key: "tools", card: (*app).toolsCard},
-	{key: "report", card: (*app).reportCard},
-	{key: "logs", card: (*app).logsCard},
+	{key: "updates", search: "about updates version", card: (*app).updatesCard},
+	{key: "tools", search: "support tools", card: (*app).toolsCard},
+	{key: "report", search: "support report problem bug", card: (*app).reportCard},
+	{key: "logs", search: "logs folder diagnostics", card: (*app).logsCard},
+}
+
+func settingsRowsFor(query string) []settingsRow {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return settingsRows
+	}
+	var filtered []settingsRow
+	for start := 0; start < len(settingsRows); {
+		heading := settingsRows[start]
+		end := start + 1
+		for end < len(settingsRows) && settingsRows[end].heading == "" {
+			end++
+		}
+		sectionMatches := strings.Contains(strings.ToLower(heading.heading), query)
+		var matchingCards []settingsRow
+		for _, row := range settingsRows[start+1 : end] {
+			if sectionMatches || strings.Contains(row.search, query) {
+				matchingCards = append(matchingCards, row)
+			}
+		}
+		if len(matchingCards) > 0 {
+			filtered = append(filtered, heading)
+			filtered = append(filtered, matchingCards...)
+		}
+		start = end
+	}
+	return filtered
+}
+
+func (a *app) settingsSearchBar(c *ui.Context) {
+	sc := m3.Of(c).Scheme
+	const buttonWidth, maxWidth = float32(40), float32(520)
+	control := ui.Row(c.Key("settings-search")).Width(maxWidth).MinWidth(0).Shrink(1)
+	target := float32(0)
+	if a.settingsSearch.open {
+		target = 1
+	}
+	grown := m3.Animate(control, "open", target, m3.SpatialFast)
+	if !a.settingsSearch.open && grown < 0.02 {
+		control.MaxWidth(buttonWidth)
+		control.Children(func() {
+			button := m3.IconButton(c, m3.IconButtonSpec{
+				Icon: m3.IconSearch, Label: "Search settings", Kind: m3.StandardIcon,
+				Size: m3.Small40, Key: "settings-search-open", Container: sc.SurfaceContainerHigh,
+			})
+			if button.Clicked() {
+				a.settingsSearch.open = true
+				a.settingsSearch.field.Focus()
+			}
+		})
+		return
+	}
+	control.MaxWidth(buttonWidth + (maxWidth-buttonWidth)*min(max(grown, 0), 1))
+	control.Children(func() {
+		result, _ := m3.SearchBar(c, m3.SearchSpec{
+			Value:       &a.settingsSearch.query,
+			Placeholder: "Search settings",
+			Key:         "settings-search-bar",
+			Focus:       &a.settingsSearch.field,
+			MaxWidth:    maxWidth,
+			Dismiss:     true,
+		})
+		if result.Changed || result.Cleared {
+			a.list.ScrollTo(0, ui.Start)
+		}
+		if result.Dismissed {
+			a.closeSettingsSearch()
+		}
+	})
+}
+
+func (a *app) closeSettingsSearch() {
+	a.settingsSearch = settingsSearchState{}
 }
 
 // settingsPage is where the user chooses how the app looks, sounds and plays,
@@ -71,14 +152,21 @@ var settingsRows = []settingsRow{
 // The rows are the rows of a list, so only the ones in view are built, laid
 // out and painted: the page is long, and scrolling it rebuilds the frame.
 func (a *app) settingsPage(c *ui.Context) {
+	rows := settingsRowsFor(a.settingsSearch.query)
+	if len(rows) == 0 {
+		ui.Column(c).Fill().Center().Children(func() {
+			a.message(c, m3.IconSearch, "No settings found", "Try another search.", "", nil)
+		})
+		return
+	}
 	a.list.Key = func(i int) any {
-		if i >= len(settingsRows) {
+		if i >= len(rows) {
 			return nil
 		}
-		return settingsRows[i].key
+		return rows[i].key
 	}
-	ui.List(c, a.list, len(settingsRows), func(i int) {
-		row := settingsRows[i]
+	ui.List(c, a.list, len(rows), func(i int) {
+		row := rows[i]
 		if row.card == nil {
 			top := float32(16)
 			if i == 0 {
