@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Media buttons on the Windows taskbar thumbnail.** Hover over Meiro in the taskbar for Previous, Play or Pause, and Next, the way Spotify offers them, without bringing the window back. They follow the taskbar's light or dark theme and come back after Explorer restarts.
+
 ### Fixed
 
 - **The queue's Recommended heading has equal space above and below, and cannot be selected.** It lines up with the artwork and separates recommendations from chosen tracks without a full-width divider.
