@@ -299,11 +299,14 @@ func (a *app) swatch(c *ui.Context, name, hex string) bool {
 		radius = 12
 	}
 	b.Size(56, 56).Radius(max(radius, 0)).Background(fill).Center().Cursor(ui.CursorPointer).Label(name).Tooltip(name)
-	if b.Hovered() && !selected {
-		b.Border(3, sc.OnSurface.Alpha(0.16))
-	}
+	border := ui.Transparent
 	if selected {
-		b.Border(3, sc.Surface)
+		border = sc.Surface
+	} else if b.Hovered() {
+		border = sc.OnSurface.Alpha(0.16)
+	}
+	b.Border(3, border)
+	if selected {
 		m3.Elevation(c, b, 1)
 	}
 	b.Children(func() {
@@ -336,13 +339,15 @@ func (a *app) styleTile(c *ui.Context, style m3.Style) bool {
 	preview := a.stylePreview(th.Seed, th.Dark, style)
 	selected := th.Style == style
 	b := ui.ButtonBase(c.Key("style-" + style.String()))
-	b.Column().AlignItems(ui.Stretch).Width(138).Padding(14).Gap(10).Radius(m3.ExtraLarge - 4).Background(preview.PrimaryContainer).Cursor(ui.CursorPointer).
+	b.Column().AlignItems(ui.Stretch).Width(138).MinHeight(120).Padding(14).Gap(10).Radius(m3.ExtraLarge - 4).Background(preview.PrimaryContainer).Cursor(ui.CursorPointer).
 		Label(style.String())
+	border := ui.Transparent
 	if selected {
-		b.Border(3, sc.Primary)
+		border = sc.Primary
 	} else if b.Hovered() {
-		b.Border(3, sc.OnSurface.Alpha(0.16))
+		border = sc.OnSurface.Alpha(0.16)
 	}
+	b.Border(3, border)
 	b.Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 			for _, dot := range []ui.Color{preview.Primary, preview.Secondary, preview.Tertiary} {

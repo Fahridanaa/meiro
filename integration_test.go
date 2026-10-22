@@ -153,6 +153,50 @@ func TestSettingsDoNotOfferWavyProgressPreference(t *testing.T) {
 	}
 }
 
+func TestPaletteTileContentDoesNotShiftOnHover(t *testing.T) {
+	a := newTestApp(t)
+	a.router.Push("/settings")
+	tt := ui.NewTester(a.view, 1000, 1400)
+	tt.Frame()
+
+	idle, ok := tt.Find("No colour at all")
+	if !ok {
+		t.Fatalf("the palette tile is not visible: %q", tt.Texts())
+	}
+	tt.Move(idle.X+idle.W/2, idle.Y+idle.H/2)
+	tt.Frame()
+
+	hovered, ok := tt.Find("No colour at all")
+	if !ok {
+		t.Fatalf("the palette tile disappeared on hover: %q", tt.Texts())
+	}
+	if idle != hovered {
+		t.Errorf("palette description bounds changed on hover: before %v, after %v", idle, hovered)
+	}
+}
+
+func TestPaletteTilesHaveUniformSize(t *testing.T) {
+	a := newTestApp(t)
+	a.router.Push("/settings")
+	tt := ui.NewTester(a.view, 1000, 1400)
+	tt.Frame()
+
+	var size ui.Rect
+	for i, name := range []string{"Tonal spot", "Vibrant", "Expressive", "Neutral", "Monochrome"} {
+		got, ok := tt.Find(name)
+		if !ok {
+			t.Fatalf("palette tile %q is not visible: %q", name, tt.Texts())
+		}
+		if i == 0 {
+			size = got
+			continue
+		}
+		if got.W != size.W || got.H != size.H {
+			t.Errorf("palette tile %q size = %vx%v, want %vx%v", name, got.W, got.H, size.W, size.H)
+		}
+	}
+}
+
 func TestHomeShowMoreAppendsContinuationSections(t *testing.T) {
 	resetFakes()
 	a := newTestApp(t)
