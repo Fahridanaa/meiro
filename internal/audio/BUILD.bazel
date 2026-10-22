@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "cache.go",
         "probe.go",
+        "probe_frames.go",
         "urls.go",
     ],
     importpath = "github.com/elianiva/meiro/internal/audio",
@@ -17,6 +18,9 @@ go_library(
 
 go_test(
     name = "audio_test",
-    srcs = ["cache_test.go"],
+    srcs = [
+        "cache_test.go",
+        "probe_test.go",
+    ],
     embed = [":audio"],
 )

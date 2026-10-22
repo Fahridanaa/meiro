@@ -115,10 +115,3 @@ func TestURLsShareOneResolve(t *testing.T) {
 		t.Errorf("a failed resolve was remembered: %d resolves", calls.Load())
 	}
 }
-
-func TestParseFFmpegDuration(t *testing.T) {
-	output := "Input #0, mov,mp4,m4a, from 'a.m4a':\n  Duration: 00:03:00.50, start: 0.000000, bitrate: 128 kb/s\n"
-	if got := parseFFmpegDuration(output); got != 3*time.Minute+500*time.Millisecond {
-		t.Errorf("duration = %v", got)
-	}
-}
