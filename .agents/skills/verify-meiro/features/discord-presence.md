@@ -10,13 +10,13 @@ activity. The feature is off by default.
 - `discord-presence-playback` publishes the current track, artist, artwork, and start and end timestamps. Discord draws a time bar from them; the end is left out while the length is unknown. The member list shows every credited artist, joined with commas, or Meiro's name when the track credits none.
 - `discord-presence-clear` clears the activity on pause, stop, disable or app exit.
 - `discord-presence-reconnect` retries when Discord is not running or its IPC connection closes.
-- `discord-presence-flatpak` finds the socket a Flatpak Discord exports under `$XDG_RUNTIME_DIR/app/<id>/`.
+- `discord-presence-client-discovery` finds standard IPC sockets for native clients, Flatpak app exports and per-app runtime paths, and Snap runtime paths without a fixed client-ID list.
 
 ## How to get to it (user POV)
 
 - Open Settings → Desktop.
 - Enable `Discord Rich Presence`.
-- Play a track while the Discord desktop client is running.
+- Play a track while a Discord desktop client with RPC enabled is running.
 
 ## Driving it with the headless tester
 
@@ -26,15 +26,15 @@ Preconditions:
 - The RPC protocol test uses an in-memory local pipe. It does not need Discord, credentials or network access.
 
 - **Settings.** Enable `Discord Rich Presence`. The switch persists in `settings.json`; users do not enter an application ID.
-- **Flatpak socket.** Point `XDG_RUNTIME_DIR` at a temp directory that holds `app/com.discordapp.Discord/discord-ipc-0`, listen on it, and call `discordrpc.New`. The handshake and the `SET_ACTIVITY` frame arrive at that path. This needs a real Unix listener, so it is a scratch proof, not a committed test. Set `TMPDIR`, `TMP` and `TEMP` to an existing empty directory too, because `dialDiscord` still dials the real `/tmp` and a native Discord there would answer first.
+- **Linux client sockets.** Discord uses `discord-ipc-N` sockets. Meiro checks the standard runtime path, Flatpak's `app/<id>` and `.flatpak/<id>/xdg-run` paths, and Snap's `snap.*` runtime paths. IDs are discovered from the runtime directory so new client IDs do not need code changes. Native package formats, including RPMs and AppImages, use the standard runtime socket.
 - **Settings switch.** `tt.Click` on the label misses the switch, because the row label and the switch are separate elements. Find the row with `tt.Find("Discord Rich Presence")` and click `row.X+row.W+20` at the row's middle height. Read `a.settings.DiscordPresence` and the saved `settings.json` (`"discordPresence": true`, indented) as the second view.
 - **Activity and keepalive.** `go test ./internal/discordrpc` runs the RPC handshake, verifies the `SET_ACTIVITY` payload, checks that the end timestamp is added once the track length arrives, confirms pause sends a null activity, and checks that an idle session answers Discord's PING with PONG.
-- **Native Discord.** Meiro's public application ID is bundled in `main.go`. Run Meiro and Discord on the same desktop, enable the setting, and play a public track. Confirm Discord shows the track, artist and a time bar ending at the track's length, and that the member list reads the artist, then pause playback and confirm the activity clears.
+- **Native Discord client.** Meiro's public application ID is bundled in `main.go`. Run Meiro and a client with RPC enabled on the same desktop, enable the setting, and play a public track. Confirm the client shows the track, artist and a time bar ending at the track's length, and that the member list reads the artist, then pause playback and confirm the activity clears.
 
 ## Gotchas
 
-- Discord must be running on the same machine. The activity is opt-in because it shares the track and artwork with Discord.
+- An RPC-capable client must be running on the same machine. The activity is opt-in because it shares the track and artwork.
 - The Discord Application ID is public and bundled in Meiro. Users do not need their own Discord app or ID. Discord may restrict an unapproved app to its listed testers.
 - The IPC path differs by platform: Unix-domain sockets on macOS and Linux, named pipes on Windows.
-- A Flatpak Discord puts its socket at `$XDG_RUNTIME_DIR/app/com.discordapp.Discord/discord-ipc-0`, not directly in the runtime directory. Meiro also checks the Canary build. The app directory can stay behind after Discord stops.
-- Discord hides the activity when its own **Activity Privacy → Share your detected activities with others** setting is off. The RPC socket still opens, Discord still answers every `SET_ACTIVITY` with the stored activity, and nothing appears on the profile. Check that setting before treating a missing card as a Meiro bug. Discord's `renderer_js.log` shows the evidence: `[RPCServer:IPC] Socket Opened: N 1561435721456296087`, then `Socket Emit` and `Socket Message` for that socket.
+- Flatpak socket locations include `$XDG_RUNTIME_DIR/app/<id>/discord-ipc-N` and `$XDG_RUNTIME_DIR/.flatpak/<id>/xdg-run/discord-ipc-N`; Snap clients can use `$XDG_RUNTIME_DIR/snap.<name>/discord-ipc-N`. Meiro discovers these paths by directory, not by a list of client names. A stale socket path can remain after a client stops; a successful socket connection alone does not prove that the client displayed the activity.
+- Custom clients may require their own RPC setting (for example, Vesktop's **Enable Rich Presence via arRPC**) and Discord's **Activity Privacy → Share your detected activities with others** setting. Discord can accept `SET_ACTIVITY` while hiding the card when activity sharing is off; its `renderer_js.log` shows `[RPCServer:IPC] Socket Opened: N 1561435721456296087`, then `Socket Emit` and `Socket Message`. Some client-side RPC implementations have bugs that Meiro cannot fix.

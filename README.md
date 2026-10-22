@@ -73,10 +73,12 @@ half of the title.
   **Quit**; the mini player is not available there.
 - **Works with your computer's controls.** Use your media keys, the Now Playing
   widget on Mac, or the media controls on Linux.
-- **Share what you hear on Discord.** With Discord running, enable Discord
-  Rich Presence in Settings → Desktop to show the current track, artist, cover
-  and a time bar with the elapsed time and the track's length; the member list
-  shows the artist. Meiro clears the activity when playback pauses or stops.
+- **Share what you hear on Discord.** With Discord or another client that
+  supports Discord Rich Presence running, enable Discord Rich Presence in
+  Settings → Desktop to show the current track, artist, cover and a time bar
+  with the elapsed time and the track's length; the member list shows the
+  artist. Some clients require you to enable RPC in their settings. Meiro
+  clears the activity when playback pauses or stops.
 - **Keyboard shortcuts.** Control music from the keyboard, and change the keys
   to what suits you.
 
