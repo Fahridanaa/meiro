@@ -40,47 +40,43 @@ func (a *app) eqBands() []float64 {
 	return a.settings.EQBands
 }
 
-// applyEQ sends the equaliser's bands to the player, which restarts the
-// decode at the current position when a track plays.
+// applyEQ sends the equaliser's bands to the player and saves the settings.
 func (a *app) applyEQ() {
 	a.eqDebounce.stop()
 	a.player.SetEQ(a.eqBands())
 	a.saveSettings()
 }
 
-// scheduleEQ applies the equaliser's bands once the sliders have been quiet
-// for a moment. A drag and a walk of the arrow keys then cost one decode
-// restart instead of one per tick; a start replaces the waiting one, and a
-// test, whose sleep returns at once, applies immediately.
+// scheduleEQ saves slider changes once they have been quiet for a moment. The
+// player already applies each change live; the delay only avoids repeated
+// settings writes while a slider moves.
 func (a *app) scheduleEQ() {
-	bands := a.eqBands()
 	startTask(a, &a.eqDebounce, noTimeout,
-		func(ctx context.Context) ([]float64, error) {
+		func(ctx context.Context) (struct{}, error) {
 			if err := a.sleep(ctx, 250*time.Millisecond); err != nil {
-				return nil, err
+				return struct{}{}, err
 			}
-			return bands, nil
+			return struct{}{}, nil
 		},
-		func(bands []float64, err error) {
+		func(_ struct{}, err error) {
 			if err != nil {
 				return
 			}
-			a.player.SetEQ(bands)
 			a.saveSettings()
 		})
 }
 
 // loadEQ shapes the player with the bands the settings hold, growing or
-// trimming them to the band count the player takes, and remembers what it
-// sent so a slider release later applies only what changed.
+// trimming them to the band count the player takes.
 func (a *app) loadEQ() {
 	a.normalizeEQBands()
+	copy(a.eqApplied[:], a.settings.EQBands)
 	a.player.SetEQ(a.eqBands())
 }
 
 // normalizeEQBands makes the settings' band table exactly the count the
-// player takes, filling new bands with silence, and syncs what the player
-// has been sent with it.
+// player takes, filling new bands with silence, and syncs what it has been
+// sent with the slider state.
 func (a *app) normalizeEQBands() {
 	if len(a.settings.EQBands) == player.EQBandCount {
 		return

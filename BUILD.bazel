@@ -248,6 +248,7 @@ go_test(
         "//internal/proc",
         "//internal/report",
         "//internal/settings",
+        "//m3",
         "//player",
         "//youtube",
         "@com_github_egoist_mygo//ui",

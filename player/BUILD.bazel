@@ -3,6 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "player",
     srcs = [
+        "equalizer.go",
         "null.go",
         "player.go",
         "window_unix.go",

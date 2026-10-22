@@ -160,11 +160,11 @@ type app struct {
 	toolsLoaded bool
 	toolsLookup task
 
-	// eqApplied is the band table the player last received, so a slider
-	// release applies only what changed.
+	// eqApplied is the band table the player last received, so slider changes
+	// update the live filter only when a gain actually changes.
 	eqApplied [player.EQBandCount]float64
-	// eqDebounce waits out a quiet moment after the sliders moved before the
-	// changed bands restart the decode.
+	// eqDebounce waits out a quiet moment after slider changes before saving
+	// settings.
 	eqDebounce task
 
 	// lyricsSource finds a track's lyrics on LRCLIB; tests replace it.

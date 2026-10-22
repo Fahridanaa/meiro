@@ -6,7 +6,7 @@ A user changes the theme and equaliser, rebinds shortcuts, clears history, opens
 
 - `settings-theme` switches `Dark` and a seed colour such as `Rose`.
 - `settings-persist` writes `settings.json` and reads it back.
-- `settings-eq` toggles `Equaliser on` and picks a preset.
+- `settings-eq` toggles `Equaliser on`, picks a preset, and changes slider gains live without restarting the current stream.
 - `settings-shortcuts` shows, records, conflicts and resets shortcuts, and runs the defaults.
 - `keyboard-navigation` covers Tab and Shift+Tab through row and card actions, menu arrows/Home/End/Escape, Shift+F10 context menus, player tabs, queue selection/activation, and keyboard sliders.
 - `settings-history` clears listening history with `Clear history`, then `Delete all plays`.

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Equaliser changes apply live while music keeps playing.** Moving a band or choosing a preset no longer restarts the stream.
+
 ### Fixed
 
 - **Palette options have a uniform size, and hover outlines no longer shift their contents.** Colour swatches also keep their contents in place when hovered.

@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -66,8 +67,7 @@ type Player struct {
 	volume  float64
 
 	// eqBands holds one gain in dB per EQFrequencies entry, nil when the
-	// equaliser is off. Guarded by ctl, which also serialises the restart
-	// that applies a change.
+	// equaliser is off. Guarded by ctl while sessions publish updated targets.
 	eqBands []float64
 
 	// next is the stream decoding ahead of the end of the current one, and
@@ -152,7 +152,7 @@ func (p *Player) Preload(tag, url string) error {
 		return nil
 	}
 	// eqBands only changes under ctl, so snapshot it there; Preload itself
-	// runs without it, like the rest of the app's calls.
+	// decodes without the lock, like the rest of the app's calls.
 	p.ctl.Lock()
 	eq := p.eqBands
 	p.ctl.Unlock()
@@ -161,15 +161,22 @@ func (p *Player) Preload(tag, url string) error {
 		return err
 	}
 	next.tag = tag
+	// A slider may have changed EQ while this stream was decoding. Publish it
+	// with the latest target while ctl prevents a newer change from racing the
+	// handoff into p.next.
+	p.ctl.Lock()
+	next.eq.Set(p.eqBands)
 	p.mu.Lock()
 	if p.session == nil {
 		p.mu.Unlock()
+		p.ctl.Unlock()
 		next.discard()
 		return nil
 	}
 	old := p.next
 	p.next = next
 	p.mu.Unlock()
+	p.ctl.Unlock()
 	if old != nil {
 		old.discard()
 	}
@@ -287,14 +294,14 @@ func (p *Player) SetVolume(volume float64) {
 
 // SetEQ sets the equaliser's band gains, in dB, one per EQFrequencies entry.
 // nil turns the equaliser off. A non-nil slice of another length is ignored.
-// A change while a stream plays restarts the decode at the current position,
-// the way a seek does, so the new filter chain takes effect at once.
+// The audio reader applies a change to the current and preloaded streams
+// without stopping either decode.
 func (p *Player) SetEQ(gains []float64) {
 	if gains != nil && len(gains) != EQBandCount {
 		return
 	}
 	for _, g := range gains {
-		if g != g { // NaN
+		if math.IsNaN(g) || math.IsInf(g, 0) {
 			return
 		}
 	}
@@ -304,24 +311,14 @@ func (p *Player) SetEQ(gains []float64) {
 		return
 	}
 	p.eqBands = append([]float64(nil), gains...)
-	// A preloaded stream carries the old chain in its decode, so drop it; the
-	// caller preloads again with the new one.
-	p.CancelPreload()
 	p.mu.Lock()
-	s := p.session
-	var url string
-	var at time.Duration
-	var paused bool
-	if s != nil {
-		url, at, paused = s.url, s.played(), s.paused
+	if p.session != nil {
+		p.session.eq.Set(p.eqBands)
+	}
+	if p.next != nil {
+		p.next.eq.Set(p.eqBands)
 	}
 	p.mu.Unlock()
-	if s == nil {
-		return
-	}
-	// The restart replaces the session; its failure leaves the old chain
-	// playing until the next change, which is better than silence.
-	_ = p.start(url, at, paused)
 }
 
 // equalGains reports whether two band tables hold the same gains.
@@ -519,11 +516,11 @@ func (p *Player) start(url string, at time.Duration, paused bool) error {
 	return nil
 }
 
-// decode starts ffmpeg on url from at, shaped by eq, and the goroutine that
-// reaps it. The session has no output yet: start gives it one, and a handoff
-// takes over the one of the stream before it.
+// decode starts ffmpeg on url from at and the goroutine that reaps it. The
+// session's reader shapes the PCM as it reaches the output. The session has no
+// output yet: start gives it one, and a handoff takes over the one before it.
 func (p *Player) decode(ffmpeg, url string, at time.Duration, eq []float64) (*session, error) {
-	cmd := exec.Command(ffmpeg, streamArgs(url, at, eq)...) //nolint:noctx // the player ends ffmpeg itself when the stream is replaced or stopped
+	cmd := exec.Command(ffmpeg, streamArgs(url, at)...) //nolint:noctx // the player ends ffmpeg itself when the stream is replaced or stopped
 	hideWindow(cmd)
 	pipe, writer, err := os.Pipe()
 	if err != nil {
@@ -540,17 +537,16 @@ func (p *Player) decode(ffmpeg, url string, at time.Duration, eq []float64) (*se
 	_ = writer.Close()
 	s := &session{
 		url: url, cmd: cmd, pipe: pipe, stderr: stderr,
-		offset: at, done: make(chan struct{}), quit: make(chan struct{}),
+		offset: at, done: make(chan struct{}), quit: make(chan struct{}), eq: newEqualizer(eq),
 	}
-	s.source = newCountingReader(pipe, func() io.Reader { return p.handoff(s) })
+	s.source = newCountingReader(newEQReader(pipe, s.eq), func() io.Reader { return p.handoff(s) })
 	go p.reap(s)
 	return s, nil
 }
 
 // streamArgs is the ffmpeg command line that decodes url from at into signed
-// 16-bit stereo PCM on stdout, shaped by eq: one gain in dB per
-// EQFrequencies entry, no filter when every band is silent.
-func streamArgs(url string, at time.Duration, eq []float64) []string {
+// 16-bit stereo PCM on stdout. The equaliser runs as a live layer after decode.
+func streamArgs(url string, at time.Duration) []string {
 	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-xerror"}
 	if isHTTP(url) {
 		// A remote stream, or a manifest it names, cannot reach local files.
@@ -569,36 +565,7 @@ func streamArgs(url string, at time.Duration, eq []float64) []string {
 		"-vn", "-f", "s16le", "-acodec", "pcm_s16le",
 		"-ac", strconv.Itoa(channelCount), "-ar", strconv.Itoa(sampleRate),
 	)
-	if chain := eqFilter(eq); chain != "" {
-		args = append(args, "-af", chain)
-	}
 	return append(args, "pipe:1")
-}
-
-// eqFilter builds the equaliser's filter chain, empty when no band is raised
-// or cut.
-func eqFilter(eq []float64) string {
-	if len(eq) != EQBandCount {
-		return ""
-	}
-	// A boosted band makes the shaped signal louder than the stream, and the
-	// output is s16, so the loudest boost needs matching headroom first: the
-	// volume filter attenuates the whole signal by that boost, and the
-	// boosted bands raise their own frequencies back to the stream's level.
-	var chain []string
-	boost := 0.0
-	for _, gain := range eq {
-		boost = max(boost, gain)
-	}
-	if boost > 0 {
-		chain = append(chain, fmt.Sprintf("volume=%.1fdB", -boost))
-	}
-	for i, gain := range eq {
-		if gain != 0 {
-			chain = append(chain, fmt.Sprintf("equalizer=f=%g:t=q:w=1.4:g=%.1f", EQFrequencies[i], gain))
-		}
-	}
-	return strings.Join(chain, ",")
 }
 
 // isHTTP reports whether rawURL is read over HTTP, the only protocol that
@@ -819,6 +786,7 @@ type session struct {
 	pipe   io.ReadCloser
 	stderr *boundedBuffer
 	source *countingReader
+	eq     *equalizer
 	out    output
 	done   chan struct{}
 	// quit is closed when the app stops the decode.

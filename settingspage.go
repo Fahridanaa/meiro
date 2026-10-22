@@ -309,10 +309,8 @@ func (a *app) playbackCacheCard(c *ui.Context) {
 	})
 }
 
-// soundCard holds the equaliser's bands. A slider commits on release:
-// dragging writes the settings, and letting go sends the whole band table to
-// the player through the debounce, which restarts the decode once instead of
-// for every tick.
+// soundCard holds the equaliser's bands. Slider changes update the player as
+// they happen; only saving the settings waits for the drag to finish.
 func (a *app) soundCard(c *ui.Context) {
 	sc := m3.Of(c).Scheme
 	a.settingsCard(c, "Sound", m3.IconVolumeUp, func() {
@@ -324,7 +322,7 @@ func (a *app) soundCard(c *ui.Context) {
 			}
 		})
 		ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
-			settingLabel(c, "Equaliser", "Shape ten bands of the sound. A change restarts the music where it is.").Grow(1)
+			settingLabel(c, "Equaliser", "Shape ten bands of the sound as you adjust them, without restarting the stream.").Grow(1)
 			on := a.settings.EQOn
 			if m3.Switch(c, &on, "Equaliser on").Changed() {
 				a.settings.EQOn = on
@@ -351,12 +349,13 @@ func (a *app) soundCard(c *ui.Context) {
 		ui.Row(c).FillWidth().MaxWidth(640).Gap(4).Justify(ui.SpaceBetween).Children(func() {
 			for i := range player.EQBandCount {
 				ui.Column(c).Gap(6).Width(m3.MinTarget).AlignItems(ui.Center).Children(func() {
-					slider := m3.Slider(c, &a.settings.EQBands[i], -eqBoostRange, eqBoostRange, m3.SliderSpec{
+					m3.Slider(c, &a.settings.EQBands[i], -eqBoostRange, eqBoostRange, m3.SliderSpec{
 						Label: eqLabels[i] + " dB", Key: "eq-" + strconv.Itoa(i),
 						Thickness: 6, Vertical: true, Disabled: !a.settings.EQOn,
 					}).Height(148).FillWidth()
-					if !slider.Pressed() && a.eqApplied[i] != a.settings.EQBands[i] {
-						a.eqApplied[i] = a.settings.EQBands[i]
+					if a.eqApplied[i] != a.settings.EQBands[i] {
+						copy(a.eqApplied[:], a.settings.EQBands)
+						a.player.SetEQ(a.eqBands())
 						a.scheduleEQ()
 					}
 					m3.Text(c, m3.LabelLarge, eqLabels[i]).TextColor(sc.OnSurfaceVariant)
