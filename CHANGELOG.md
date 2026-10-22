@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Carousel scrollbars sit below each card's text.** A clear gap separates
+  the bar from the song title and artist.
 - **The player always shows the wavy progress bar.** The setting is gone, and the wave is on by default on every platform.
 
 ## [0.4.4] - 2026-10-21

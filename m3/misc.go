@@ -272,6 +272,9 @@ func (s *CarouselState) VisibleRange(count int, itemWidth, gap, padding float32,
 	return first, last
 }
 
+// carouselScrollbarGap clears the horizontal scrollbar from shelf text.
+const carouselScrollbarGap = 16
+
 // Carousel lays items out in one row that scrolls sideways, as a shelf of
 // cards does.
 func Carousel(c *ui.Context, s *CarouselState, key any, gap, padX float32, items func()) ui.Element {
@@ -284,8 +287,8 @@ func Carousel(c *ui.Context, s *CarouselState, key any, gap, padX float32, items
 			c.Invalidate()
 		}
 	}
-	row := ui.ScrollHorizontal(c.Key(key)).TrackScroll(&s.ScrollState).Gap(gap).PaddingX(padX).AlignItems(ui.Start).
-		ScrollbarInsets(0, padX, 0, padX).Margin(0, 0, 12)
+	row := ui.ScrollHorizontal(c.Key(key)).TrackScroll(&s.ScrollState).Gap(gap).AlignItems(ui.Start).
+		Padding(0, padX, carouselScrollbarGap, padX).ScrollbarInsets(0, padX, 0, padX).Margin(0, 0, 12)
 	row.Children(items)
 	s.view = row.Bounds().W
 	return row
