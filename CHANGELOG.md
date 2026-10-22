@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-10-22
+
 ### Fixed
 
 - **Discord Rich Presence finds custom clients installed with Flatpak or Snap.** On Linux, Meiro checks each client's exported socket location instead of only the official Discord Flatpak paths. Any client that exposes Discord's standard RPC socket can share activity.
