@@ -1,12 +1,15 @@
 package main
 
 import (
+	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/elianiva/meiro/internal/keymap"
+	"github.com/elianiva/meiro/internal/settings"
 )
 
 func TestDefaultShortcutsNavigate(t *testing.T) {
@@ -158,5 +161,179 @@ func TestBriefModifierShowsNothing(t *testing.T) {
 	tt.Frame()
 	if hasTextExactly(tt, "Space") {
 		t.Error("the keys showed at once")
+	}
+}
+
+func tabTo(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	for range 160 {
+		if tt.Focused(label) {
+			return
+		}
+		tt.Key(0, ui.KeyTab)
+	}
+	t.Fatalf("Tab never reached %q", label)
+}
+
+func TestKeyboardMenusKeepFocusAndRunActions(t *testing.T) {
+	for _, item := range []struct {
+		path, title, first, link string
+	}{
+		{"/album/MPREb_test", "Album Track One", "Play next", "https://music.youtube.com/watch?v=vid-3"},
+		{"/home", "Deep Focus", "Open album", "https://music.youtube.com/browse/MPREb_test"},
+		{"/search", "Yorushika", "Go to artist", "https://music.youtube.com/browse/UCyorushika"},
+	} {
+		t.Run(item.title, func(t *testing.T) {
+			a := newTestApp(t)
+			a.router.Push(item.path)
+			tt := ui.NewTester(a.view, 1000, 700)
+			tt.Frame()
+			if item.path == "/search" {
+				tt.Key(ui.Cmd, ui.KeyK)
+				tt.Type("yor")
+				tt.Key(0, ui.KeyEnter)
+			}
+			tabTo(t, tt, item.title)
+			tt.Key(0, ui.KeyTab)
+			menu := "More options for " + item.title
+			if !tt.Focused(menu) {
+				t.Fatal("Tab lost the menu button")
+			}
+			tt.Key(ui.Shift, ui.KeyTab)
+			if !tt.Focused(item.title) {
+				t.Fatal("Shift+Tab lost the item")
+			}
+			tt.Key(0, ui.KeyTab)
+			tt.Key(0, ui.KeyEnter)
+			if !tt.Focused(item.first) {
+				t.Fatal("the menu did not focus its first action")
+			}
+			tt.Key(ui.Cmd, ui.KeyComma)
+			if a.router.Path() != item.path {
+				t.Fatal("a background shortcut ran while the menu was open")
+			}
+			tt.Key(0, ui.KeyEnd)
+			if !tt.Focused("Copy link") {
+				t.Fatal("End did not focus the last menu action")
+			}
+			tt.Key(0, ui.KeyEnter)
+			if a.menu.open || tt.Clipboard() != item.link || !tt.Focused(menu) {
+				t.Fatalf("copy: %q, open: %v, focus restored: %v", tt.Clipboard(), a.menu.open, tt.Focused(menu))
+			}
+			tt.Key(ui.Shift, ui.KeyTab)
+			tt.Key(ui.Shift, ui.KeyF10)
+			if !tt.Focused(item.first) {
+				t.Fatal("Shift+F10 did not open the item's menu")
+			}
+			tt.Key(0, ui.KeyEscape)
+			if a.menu.open || !tt.Focused(item.title) {
+				t.Fatal("Escape did not return to the item")
+			}
+			if item.path == "/home" {
+				tt.Key(0, ui.KeyTab)
+				tt.Key(0, ui.KeyTab)
+				if !tt.Focused("Play Deep Focus") {
+					t.Fatal("Tab did not reach the card's play button")
+				}
+				tt.Key(0, ui.KeySpace)
+				if a.current.VideoID != "vid-3" || a.router.Path() != "/home" {
+					t.Fatal("Space did not play the album from its card")
+				}
+			}
+		})
+	}
+}
+
+func TestKeyboardSuggestionMenuReturnsToTheSearch(t *testing.T) {
+	a := newTestApp(t)
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.Frame()
+	tt.Key(ui.Cmd, ui.KeyK)
+	tt.Type("yor")
+	tabTo(t, tt, "Suggested Song")
+	tt.Key(ui.Shift, ui.KeyF10)
+	if !tt.Focused("Play next") {
+		t.Fatal("the suggestion's menu did not take focus")
+	}
+	tt.Key(0, ui.KeyEscape)
+	if a.menu.open || !tt.Focused("Suggested Song") || !a.search.suggestOpen {
+		t.Fatal("Escape did not return to the search suggestion")
+	}
+}
+
+func TestKeyboardPlayerTabsAndQueue(t *testing.T) {
+	a, _ := playbackApp(t)
+	a.current = tracks("a")[0]
+	a.queue.replace(a.current, tracks("a", "b", "c"), 0, "Keyboard test")
+	tt := ui.NewTester(a.view, 1280, 800)
+	tt.Frame()
+	tabTo(t, tt, "Up next")
+	tt.Key(0, ui.KeyEnter)
+	tt.Advance(time.Second)
+	tabTo(t, tt, "Up next")
+	for _, step := range []struct {
+		key   ui.Key
+		tab   panelTab
+		label string
+	}{{ui.KeyRight, tabLyrics, "Lyrics"}, {ui.KeyEnd, tabRelated, "Related"}, {ui.KeyHome, tabQueue, "Up next"}} {
+		tt.Key(0, step.key)
+		if a.nowPlaying.tab != step.tab || !tt.Focused(step.label) {
+			t.Fatalf("%v did not select and focus %s", step.key, step.label)
+		}
+	}
+	// Tab enters the queue list. Home and Down choose the second track.
+	tabTo(t, tt, "Track a")
+	tt.Key(0, ui.KeyHome)
+	tt.Key(0, ui.KeyDown)
+	tt.Key(ui.Shift, ui.KeyF10)
+	if !tt.Focused("Move up") {
+		t.Fatal("the selected queue track's menu did not take focus")
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyDown)
+	if !tt.Focused("Remove from queue") {
+		t.Fatal("Down did not reach Remove from queue")
+	}
+	tt.Key(0, ui.KeyEnter)
+	if a.queue.len() != 2 || a.queue.at(1).VideoID != "c" {
+		t.Fatal("keyboard did not remove only Track b")
+	}
+	tt.Key(0, ui.KeyEnd)
+	tt.Key(0, ui.KeyEnter)
+	if a.current.VideoID != "c" {
+		t.Fatal("Enter did not play the selected queue track")
+	}
+}
+
+func TestKeyboardVolumeIsSaved(t *testing.T) {
+	for _, width := range []int{920, 1280} {
+		a := newTestApp(t)
+		a.current = tracks("a")[0]
+		a.setVolume(37)
+		a.saver.Path = filepath.Join(t.TempDir(), "settings.json")
+		tt := ui.NewTester(a.view, width, 700)
+		tt.Frame()
+		tabTo(t, tt, "Volume")
+		tt.Key(0, ui.KeyLeft)
+		a.saver.Wait()
+		if a.volume != 36 || settings.Load(a.saver.Path).Volume != 36 {
+			t.Fatalf("width %d: keyboard volume was not applied and saved", width)
+		}
+		tt.Key(0, ui.KeyTab)
+		if tt.Focused("Volume") {
+			t.Fatalf("width %d: Tab could not leave Volume", width)
+		}
+	}
+}
+
+func TestKeyboardOpensTheCoverMenu(t *testing.T) {
+	a := newTestApp(t)
+	a.router.Push("/album/MPREb_test")
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.Frame()
+	tabTo(t, tt, "More options for Deep Focus")
+	tt.Key(0, ui.KeyEnter)
+	if !a.menu.open || !tt.Focused("Start radio") {
+		t.Fatal("Enter on the cover did not open its menu")
 	}
 }

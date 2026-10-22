@@ -8,6 +8,7 @@ A user changes the theme and equaliser, rebinds shortcuts, clears history, opens
 - `settings-persist` writes `settings.json` and reads it back.
 - `settings-eq` toggles `Equaliser on` and picks a preset.
 - `settings-shortcuts` shows, records, conflicts and resets shortcuts, and runs the defaults.
+- `keyboard-navigation` covers Tab and Shift+Tab through row and card actions, menu arrows/Home/End/Escape, Shift+F10 context menus, player tabs, queue selection/activation, and keyboard sliders.
 - `settings-history` clears listening history with `Clear history`, then `Delete all plays`.
 - `settings-support` opens `Open logs folder` and `Report a problem` with a prefilled issue.
 - `settings-lastfm` connects, pauses and disconnects Last.fm, and scrobbles qualifying plays.
@@ -18,6 +19,7 @@ A user changes the theme and equaliser, rebinds shortcuts, clears history, opens
 
 - Click `Settings` in the rail or press `Cmd+,`.
 - Hold `Cmd` over the app to see the shortcut hints.
+- Use Tab to reach controls, Enter or Space to activate them, and Shift+F10 for an item's menu. Use arrows in menus and player tabs; Escape closes a menu and returns focus.
 
 ## Driving it with the headless tester
 
@@ -28,6 +30,7 @@ Preconditions:
 - **Theme.** Verified. `p.click("Dark", "dark")`, `p.click("Rose", "rose")`. Then `a.saver.Save(&a.settings)`, `a.saver.Wait()` and read the file. Mirror `TestSettingsPersistAcrossRestarts`.
 - **Restart.** Build a second `newTestApp(t)` and `settings.Load(path)`. The mode and seed came back.
 - **Shortcut.** Mirror `TestRecordingANewShortcut`. Press the key with `tt.Key(mods, key)`, never by calling the action.
+- **Keyboard-only navigation.** Mirror `TestKeyboardMenusKeepFocusAndRunActions`, `TestKeyboardPlayerTabsAndQueue`, `TestKeyboardOpensTheCoverMenu` and `TestKeyboardVolumeIsSaved` in `shortcuts_test.go`. The `tabTo` helper only sends Tab; verify the next action's focus explicitly. Test volume at 920 and 1280 pixels: the narrow popup must survive focus moving from Mute to Volume. `TestSeekingMovesThePlayerOffTheMainThread` checks Home and Right against the real decoder position, not only the scrubber value.
 - **Top bar.** Verified by `TestSettingsPagesLeaveTheMusicSearchOutOfTheTopBar`. `tt.Find(searchPlaceholder)` is absent on `/settings` and `/stats`; the account button there is only the page's own card; `/home` keeps both. The account stays one click away as the settings' first card.
 - **Progress bar.** `TestSettingsDoNotOfferWavyProgressPreference` confirms Settings no longer offers the wave toggle or its warning. All player scrubbers use the shared `a.scrubber` with the wave enabled.
 - **History.** `p.click("Clear history", "confirm")`, `p.click("Delete all plays", "cleared")`. `a.history` is empty and the file on disk is too.
@@ -37,5 +40,7 @@ Preconditions:
 
 - Settings write through a debounced `Writer`. Call `Save` and `Wait` before you read the file.
 - Shortcut tests press `ui.Cmd` and let the app map it, as `shortcuts_test.go` does. Copy that.
+- `tt.Focused("Track a")` also reports true when the enclosing queue list has focus. Use Home then Down to select a specific queue row; do not treat that label alone as proof of which row is selected.
+- Give popover panels stable keys before building their children. A focus tooltip can change the order of overlays; without a key, tabbing from Mute to Volume rebuilds the slider under a different identity and restores focus to Mute.
 - The session key must not appear in `settings.json` (`TestConnectingPausingAndDisconnectingInSettings`). Grep the file in a Last.fm proof.
 - Never put a real cookie, key or token in a proof artifact. `steps.txt` records every text on screen.

@@ -89,6 +89,9 @@ func (a *app) scrubber(c *ui.Context) {
 		if a.scrubbing && !slider.Pressed() {
 			a.scrubbing = false
 			a.seek(time.Duration(a.scrub * float64(time.Second)))
+		} else if slider.Changed() && !slider.Pressed() {
+			// Arrow keys, Home and End change the value without a pointer press.
+			a.seek(time.Duration(a.scrub * float64(time.Second)))
 		}
 		m3.Text(c, m3.LabelMedium, clock(a.total)).Width(40).Shrink(0).TextColor(sc.OnSurfaceVariant).FontFeatures("tnum")
 	})
@@ -123,11 +126,14 @@ func (a *app) volumeSlider(c *ui.Context, vertical bool) ui.Element {
 	if slider.Changed() {
 		a.setVolume(v)
 	}
-	// The volume is kept once the user lets go, not on every step.
-	if slider.Pressed() {
+	// Save after a pointer drag, or after each keyboard edit.
+	switch {
+	case slider.Pressed():
 		a.nowPlaying.volumeHeld = true
-	} else if a.nowPlaying.volumeHeld {
+	case a.nowPlaying.volumeHeld:
 		a.nowPlaying.volumeHeld = false
+		a.saveSettings()
+	case slider.Changed():
 		a.saveSettings()
 	}
 	return slider
@@ -162,7 +168,7 @@ func (a *app) compactVolumeControl(c *ui.Context) {
 		open := anchor.Hovered() || anchor.FocusVisible() || a.nowPlaying.volumePopup
 		var slider ui.Element
 		panel := ui.PopoverBase(c, anchor, &open, func(panel ui.Element) {
-			panel.Width(64).Padding(8).Radius(m3.Large).Margin(0).Background(sc.SurfaceContainerHigh)
+			panel.Key("volume-popup").Width(64).Padding(8).Radius(m3.Large).Margin(0).Background(sc.SurfaceContainerHigh)
 			m3.Elevation(c, panel, 3)
 			a.hinted(c, func() {
 				ui.Column(c).Width(48).Height(128).Center().Children(func() {

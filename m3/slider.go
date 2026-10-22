@@ -71,7 +71,7 @@ func Slider(c *ui.Context, value *float64, lo, hi float64, spec SliderSpec) ui.E
 	const pad float32 = 10
 	handleH := max(thick+16, 24)
 	s := ui.SliderBase(c.Key(key), value, lo, hi).Height(max(handleH, MinTarget)).PaddingX(pad).
-		Cursor(ui.CursorPointer).Grow(1).MinWidth(40)
+		Cursor(ui.CursorPointer).Grow(1).MinWidth(40).FocusRing(false)
 	if !spec.Vertical {
 		// The pointer finds the slider MinTarget high; the layout keeps its
 		// old height, as a button's does.
@@ -157,6 +157,9 @@ func Slider(c *ui.Context, value *float64, lo, hi float64, spec SliderSpec) ui.E
 			})
 			p.Fill(ui.Rect{X: hx - 3, Y: cy - handleH/2, W: 6, H: handleH}, sc.Surface, 3)
 			p.Fill(ui.Rect{X: hx - 1.5, Y: cy - handleH/2 + 2, W: 3, H: handleH - 4}, sc.OnSurface, 1.5)
+			if focused {
+				p.Stroke(ui.Rect{X: hx - 6, Y: cy - handleH/2 - 3, W: 12, H: handleH + 6}, sc.OnSurface, 6, 2)
+			}
 			return
 		}
 

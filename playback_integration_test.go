@@ -804,6 +804,23 @@ func TestSeekingMovesThePlayerOffTheMainThread(t *testing.T) {
 	if got := a.player.Position(); got < 8*time.Second {
 		t.Fatalf("position after the second seek = %v, want about 9s", got)
 	}
+
+	// Keyboard edits must reach the decoder too, not only move the thumb.
+	a.player.Pause()
+	a.total, a.scrub = 15*time.Second, 9
+	tt := ui.NewTester(a.view, 1280, 800)
+	tt.Frame()
+	tabTo(t, tt, "Position")
+	tt.Key(0, ui.KeyHome)
+	drain()
+	if got := a.player.Position(); got > time.Second {
+		t.Fatalf("Home left playback at %v, want the start", got)
+	}
+	tt.Key(0, ui.KeyRight)
+	drain()
+	if got := a.player.Position(); got < 100*time.Millisecond || got > time.Second {
+		t.Fatalf("Right sought to %v, want 150ms (1%% of 15s)", got)
+	}
 }
 
 // A track the audio cache holds plays from the cache, without asking the

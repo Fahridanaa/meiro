@@ -58,6 +58,7 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 	isSong := item.IsTrack()
 	playing := a.playingRow(item, o)
 	selected := o.list == "queue" && a.nowPlaying.queueSelection.Has(queueRowKey(&a.queue, a.queue.rowOf(o.position)))
+	queueCursor := o.list == "queue" && a.nowPlaying.queueList.Focused(c) && a.nowPlaying.queueSelectionCursor == a.queue.rowOf(o.position)
 	key := songKey(item, o)
 	height, artSize, padding, gap, iconSize := float32(rowHeight), float32(48), float32(8), float32(12), float32(24)
 	titleRole, subtitleRole := m3.BodyLarge, m3.BodyMedium
@@ -82,13 +83,24 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 		container = sc.SecondaryContainer
 	}
 	var main, menuButton, menuAnchor ui.Element
-	hasMenu, hasAnchor := false, false
+	hasAnchor := false
 	row.Children(func() {
-		main = ui.ButtonBase(c.Key(key + "-activate"))
+		main = ui.ButtonBase(c.Key(key + "-activate")).FocusRing(false)
 		hovered := row.Hovered()
 		main.Grow(1).Basis(0).MinWidth(0).Height(height - 2*padding).Gap(gap).AlignItems(ui.Center).
 			Radius(m3.Large).Cursor(ui.CursorPointer).Label(item.Title).Background(ui.Transparent)
-		row.Background(m3.StateFill(container, sc.OnSurface, hovered && !playing, main.Pressed(), main.FocusVisible()))
+		row.Background(m3.StateFill(container, sc.OnSurface, hovered && !playing, main.Pressed(), false))
+		// The list already outlines an unselected cursor. Selected rows and
+		// the row's own button need one outline around the whole row instead.
+		if main.FocusVisible() || queueCursor && selected {
+			focusColor := sc.Primary
+			if selected && !playing {
+				focusColor = sc.OnPrimary
+			}
+			row.DrawOver(func(p *ui.Painter, r ui.Rect) {
+				p.Stroke(ui.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}, focusColor, m3.Large, 2)
+			})
+		}
 		main.Children(func() {
 			titleColour, subColour := sc.OnSurface, sc.OnSurfaceVariant
 			if playing {
@@ -151,40 +163,27 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 			// button opened points at the button.
 			menuAnchor, hasAnchor = a.menu.pointerAnchor(c, key)
 		})
-		// A row of the queue carries no icon buttons: a right click opens its
-		// menu, which holds its edits, so the length can take the width the
-		// buttons held. The pointer frees the dots; the keyboard keeps them,
-		// since it has no other way to the menu.
-		switch {
-		case o.list == "queue" && (main.FocusVisible() || a.menu.opened(key+"-menu")):
-			menuButton = m3.IconButton(c, m3.IconButtonSpec{
-				Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
-			})
-			hasMenu = true
-		case o.list == "queue":
-			hasMenu = true
-		case hovered || main.FocusVisible() || a.menu.opened(key):
-			menuButton = m3.IconButton(c, m3.IconButtonSpec{
-				Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
-			})
-			hasMenu = true
-		default:
-			// The button's place stays, so the length does not move when the
-			// pointer arrives.
-			rowButtonSlot(c)
+		// Keep the button in the focus order even while its dots are hidden.
+		// Removing it when the main button loses focus strands Tab here.
+		menuContainer := ui.Transparent
+		if selected && !playing {
+			menuContainer = sc.SurfaceContainerHighest
+		}
+		menuButton = m3.IconButton(c, m3.IconButtonSpec{
+			Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
+			Container: menuContainer,
+		})
+		if !main.FocusVisible() && !menuButton.FocusVisible() && !a.menu.opened(key) && (!hovered || o.list == "queue") {
+			menuButton.Opacity(0).PassThrough()
 		}
 	})
-	if hasMenu {
-		pointer := main.RightClicked() || menuButton.RightClicked()
-		if menuButton.Clicked() || pointer {
-			// The pointer's place is read when the menu opens: reading it every
-			// frame makes the row track the pointer, and a drag of the row then
-			// never starts.
-			x, y, _ := main.PointerPosition()
-			a.menu.show(key, pointer, x, y)
-		}
+	pointer := main.RightClicked() || menuButton.RightClicked()
+	if menuButton.Clicked() || pointer || main.Shortcut(ui.Shift, ui.KeyF10) {
+		// Read the pointer only when opening, so dragging the row still works.
+		x, y, _ := main.PointerPosition()
+		a.menu.show(key, pointer, x, y)
 	}
-	if hasMenu && a.menu.owns(key) {
+	if a.menu.owns(key) {
 		anchor := a.menu.anchor(menuButton, menuAnchor, hasAnchor)
 		if isSong {
 			a.songMenu(c, anchor, key, item, o)
@@ -217,9 +216,4 @@ func (a *app) songRow(c *ui.Context, item youtube.MusicItem, queue []youtube.Mus
 			a.activate(item, queue)
 		}
 	}
-}
-
-// rowButtonSlot holds the place of a row's icon button while it is not shown.
-func rowButtonSlot(c *ui.Context) {
-	ui.Box(c).Size(32, 32).Shrink(0)
 }

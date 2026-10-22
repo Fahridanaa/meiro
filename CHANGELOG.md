@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Keyboard navigation keeps focus on the control you choose.** Tab and Shift+Tab reach row and card menus without losing focus. Menus support arrow keys, Home, End and Escape, and return focus when closed. Shift+F10 opens an item's menu, the player tabs support arrow keys, and Enter plays the selected queue track.
+- **Keyboard focus follows each control's shape.** Song rows have one outline instead of an inset outline inside a second highlight. Buttons, navigation and sliders indicate the focused shape rather than their larger pointer target, and selected queue text stays readable.
+- **Keyboard slider changes take effect.** Position changes seek playback, volume changes are saved, and the narrow player's volume popup keeps focus when you Tab into it.
+
 ## [0.4.5] - 2026-10-22
 
 ### Added

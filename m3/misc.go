@@ -121,19 +121,27 @@ func Snackbars(c *ui.Context, inset float32) {
 // Menu opens a Material menu below anchor while *open is true.
 func Menu(c *ui.Context, anchor ui.Element, open *bool, width float32, build func()) {
 	sc := Of(c).Scheme
+	wasOpen := *open
 	ui.PopoverBase(c, anchor, open, func(panel ui.Element) {
-		panel.Width(width).Padding(8).Radius(Large).Margin(8, 0, 0, 0).Background(sc.SurfaceContainerHigh).
-			Gap(2).TextColor(sc.OnSurface)
+		panel.Key(anchor.ID()).Width(width).Padding(8).Radius(Large).Margin(8, 0, 0, 0).Background(sc.SurfaceContainerHigh).
+			TextColor(sc.OnSurface)
 		Elevation(c, panel, 3)
-		build()
+		// The popover's anchor scope belongs to the panel itself. Put the
+		// modal scope inside it so opening a menu moves focus to its actions.
+		ui.Column(c).Gap(2).Role(ui.RoleMenu).Modal().FocusGroup(ui.Vertical).Children(build)
 	})
+	if wasOpen && !*open {
+		// MyGo restores focus after painting this frame. Show the restored
+		// control's focus ring without waiting for another input event.
+		c.AnimationFrame()
+	}
 }
 
 // MenuItem is one entry of a menu.
 func MenuItem(c *ui.Context, label string, icon *ui.SVG) ui.Element {
 	sc := Of(c).Scheme
 	b := ui.ButtonBase(c.Key("menu-" + label))
-	b.Height(48).PaddingX(12).Gap(12).AlignItems(ui.Center).Radius(Medium).Cursor(ui.CursorPointer).Label(label).
+	b.Height(48).PaddingX(12).Gap(12).AlignItems(ui.Center).Radius(Medium).Cursor(ui.CursorPointer).Label(label).Role(ui.RoleMenuItem).
 		Background(StateFill(ui.Transparent, sc.OnSurface, b.Hovered(), b.Pressed(), b.FocusVisible()))
 	b.Children(func() {
 		if icon != nil {

@@ -189,7 +189,7 @@ func (a *app) searchSuggestions(c *ui.Context, bar ui.Element) {
 	}
 	ui.PopoverBase(c, bar, &s.suggestOpen, func(panel ui.Element) {
 		sc := m3.Of(c).Scheme
-		panel.Width(width).Padding(8).Gap(2).Radius(m3.Large).Margin(8, 0, 0, 0).
+		panel.Key("search-suggestions").Width(width).Padding(8).Gap(2).Radius(m3.Large).Margin(8, 0, 0, 0).
 			Background(sc.SurfaceContainerHigh).TextColor(sc.OnSurface)
 		m3.Elevation(c, panel, 3)
 		panel.Children(func() {
@@ -256,6 +256,9 @@ func (a *app) suggestionItem(c *ui.Context, item youtube.MusicItem, tracks []you
 	if row.RightClicked() {
 		x, y, _ := row.PointerPosition()
 		a.menu.show(key, true, x, y)
+	}
+	if row.Shortcut(ui.Shift, ui.KeyF10) {
+		a.menu.show(key, false, 0, 0)
 	}
 	if a.menu.owns(key) {
 		// The row has no menu button to point at: the menu follows the
@@ -380,14 +383,15 @@ func (a *app) topResult(c *ui.Context, item youtube.MusicItem) {
 				return
 			}
 			// The menu sits on the artwork, as a card's does.
-			if hovered || card.FocusVisible() || a.menu.opened(key+"-menu") {
-				if target.Kind != youtube.TargetNone {
-					menuButton = m3.IconButton(c, m3.IconButtonSpec{
-						Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
-						// On a picture the dots need a ground of their own.
-						Container: sc.SurfaceContainerHighest.Alpha(0.85),
-					}).Attach(ui.AnchorTopRight, ui.AnchorTopRight).Top(0).Right(0)
-					hasMenu = true
+			if target.Kind != youtube.TargetNone {
+				menuButton = m3.IconButton(c, m3.IconButtonSpec{
+					Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
+					// On a picture the dots need a ground of their own.
+					Container: sc.SurfaceContainerHighest.Alpha(0.85),
+				}).Attach(ui.AnchorTopRight, ui.AnchorTopRight).Top(0).Right(0)
+				hasMenu = true
+				if !hovered && !card.FocusWithin() && !a.menu.opened(key+"-menu") {
+					menuButton.Opacity(0).PassThrough()
 				}
 			}
 		})
@@ -424,7 +428,7 @@ func (a *app) topResult(c *ui.Context, item youtube.MusicItem) {
 	if hasMenu {
 		pointer := card.RightClicked() || menuButton.RightClicked()
 		x, y, _ := card.PointerPosition()
-		if menuButton.Clicked() || pointer {
+		if menuButton.Clicked() || pointer || card.Shortcut(ui.Shift, ui.KeyF10) {
 			a.menu.show(key+"-menu", pointer, x, y)
 			menuClicked = true
 		}

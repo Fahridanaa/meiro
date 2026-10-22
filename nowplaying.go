@@ -263,7 +263,9 @@ func (a *app) sidePanel(c *ui.Context, wide, compactQueue bool) {
 
 func (a *app) nowPlayingTabs(c *ui.Context, compact bool) {
 	sc := m3.Of(c).Scheme
-	tabs := ui.Row(c)
+	selectedTab := int(a.nowPlaying.tab)
+	group := ui.TabsBase(c.Key("np-tabs"), &selectedTab, len(panelTabs))
+	tabs := group.List
 	if compact {
 		tabs.Padding(4, 8, 0)
 	} else {
@@ -272,13 +274,13 @@ func (a *app) nowPlayingTabs(c *ui.Context, compact bool) {
 		tabs.Padding(4, 12, 8)
 	}
 	tabs.Gap(4).Children(func() {
-		for _, t := range panelTabs {
-			selected := a.nowPlaying.tab == t.tab
+		for i, t := range panelTabs {
+			button := group.Tab(i)
+			selected := selectedTab == i
 			container, content := ui.Transparent, sc.OnSurfaceVariant
 			if selected {
 				container, content = sc.SecondaryContainer, sc.OnSecondaryContainer
 			}
-			button := ui.ButtonBase(c.Key("np-tab-" + t.label))
 			button.Grow(1).Basis(0).MinWidth(0).Height(m3.MinTarget).Center().Radius(m3.Full).
 				Cursor(ui.CursorPointer).Label(t.label).Tooltip(t.label).Background(ui.Transparent)
 			if compact {
@@ -300,12 +302,12 @@ func (a *app) nowPlayingTabs(c *ui.Context, compact bool) {
 					text.FontWeight(600)
 				}
 			})
-			if button.Clicked() {
-				a.nowPlaying.tab = t.tab
-				a.loadPanel()
-			}
 		}
 	})
+	if tabs.Changed() {
+		a.nowPlaying.tab = panelTabs[selectedTab].tab
+		a.loadPanel()
+	}
 }
 
 // queueSourceLine names the list the queue plays from, on one line: "Playing
@@ -454,7 +456,7 @@ func (a *app) queueView(c *ui.Context, compact bool) {
 	if compact {
 		listBottomPadding = 4
 	}
-	ui.List(c, list, q.rows(), func(row int) {
+	view := ui.List(c, list, q.rows(), func(row int) {
 		index, ok := q.trackAt(row)
 		if !ok {
 			// Center the heading between the visible rows, including the next row's artwork inset.
@@ -470,7 +472,17 @@ func (a *app) queueView(c *ui.Context, compact bool) {
 			return
 		}
 		a.songRow(c, q.at(index), q.items, songOptions{directQueue: true, source: q.source, list: "queue", position: index, compact: compact})
-	}).Grow(1).Padding(0, 8, listBottomPadding)
+	}).Grow(1).Padding(0, 8, listBottomPadding).FocusRing(false)
+	if index, ok := q.trackAt(a.nowPlaying.queueSelectionCursor); ok {
+		if view.Submitted() {
+			a.clearQueueSelection()
+			a.playFrom(q.at(index), q.items, index, youtube.UpNextOptions{}, q.source)
+		}
+		if list.Shortcut(c, ui.Shift, ui.KeyF10) {
+			a.menu.show(songKey(q.at(index), songOptions{list: "queue", position: index}), false, 0, 0)
+			c.Invalidate()
+		}
+	}
 }
 
 func (a *app) relatedView(c *ui.Context) {

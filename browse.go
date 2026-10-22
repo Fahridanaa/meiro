@@ -352,22 +352,24 @@ func (a *app) card(c *ui.Context, item youtube.MusicItem, queue []youtube.MusicI
 				})
 				return
 			}
-			if hovered || card.FocusVisible() || a.menu.opened(key+"-menu") {
-				if kind != youtube.TargetNone {
-					menuButton = m3.IconButton(c, m3.IconButtonSpec{
-						Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
-						// On a picture the dots need a ground of their own.
-						Container: sc.SurfaceContainerHighest.Alpha(0.85),
-					}).Attach(ui.AnchorTopRight, ui.AnchorTopRight).Top(0).Right(0)
-					hasMenu = true
+			if kind != youtube.TargetNone {
+				menuButton = m3.IconButton(c, m3.IconButtonSpec{
+					Icon: m3.IconMore, Label: "More options for " + item.Title, Key: key + "-menu",
+					// On a picture the dots need a ground of their own.
+					Container: sc.SurfaceContainerHighest.Alpha(0.85),
+				}).Attach(ui.AnchorTopRight, ui.AnchorTopRight).Top(0).Right(0)
+				hasMenu = true
+				if !hovered && !card.FocusWithin() && !a.menu.opened(key+"-menu") {
+					menuButton.Opacity(0).PassThrough()
 				}
 			}
-			if hovered && (kind == youtube.TargetTrack || kind == youtube.TargetAlbum || kind == youtube.TargetPlaylist) {
+			if kind == youtube.TargetTrack || kind == youtube.TargetAlbum || kind == youtube.TargetPlaylist {
 				fab := m3.FAB(c, m3.FABSpec{Icon: m3.IconPlay, Size: m3.FABSmall, Tone: m3.FABPrimary, Key: "play"}).
 					Attach(ui.AnchorBottomRight, ui.AnchorBottomRight).Right(8).Bottom(8)
-				enter := m3.SpatialFast.Motion()
-				enter.Enter = &ui.Motion{Y: 8, Scale: 0.85}
-				fab.Transition(enter)
+				fab.Label("Play " + item.Title)
+				if !hovered && !card.FocusWithin() {
+					fab.Opacity(0).PassThrough()
+				}
 				if fab.Clicked() {
 					played = true
 				}
@@ -384,7 +386,7 @@ func (a *app) card(c *ui.Context, item youtube.MusicItem, queue []youtube.MusicI
 	if hasMenu {
 		pointer := card.RightClicked() || menuButton.RightClicked()
 		x, y, _ := card.PointerPosition()
-		if menuButton.Clicked() || pointer {
+		if menuButton.Clicked() || pointer || card.Shortcut(ui.Shift, ui.KeyF10) {
 			a.menu.show(key+"-menu", pointer, x, y)
 			menuClicked = true
 		}

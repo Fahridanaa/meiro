@@ -72,7 +72,7 @@ func SearchBar(c *ui.Context, spec SearchSpec) (SearchResult, ui.Element) {
 			ui.Icon(c, IconSearch).FontSize(24).TextColor(sc.OnSurfaceVariant)
 		}
 		input := ui.TextInputBase(c.Key("input"), spec.Value).Placeholder(spec.Placeholder).Label(spec.Placeholder).
-			Grow(1).MinWidth(0).FontSize(16).TextColor(sc.OnSurface).Padding(0, spec.TrailingPadding, 0, 0)
+			Grow(1).MinWidth(0).FontSize(16).TextColor(sc.OnSurface).Padding(0, spec.TrailingPadding, 0, 0).FocusRing(false)
 		if spec.Focus != nil {
 			input.Bind(spec.Focus)
 		}

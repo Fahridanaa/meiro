@@ -136,6 +136,17 @@ func newButtonBase(c *ui.Context, key any) ui.Element {
 	return ui.ButtonBase(c)
 }
 
+// focusRing follows the visible shape, not the larger pointer target.
+func focusRing(c *ui.Context, owner, shape ui.Element, radius float32) {
+	owner.FocusRing(false)
+	if owner.FocusVisible() {
+		color := Of(c).Scheme.Primary
+		shape.DrawOver(func(p *ui.Painter, r ui.Rect) {
+			p.Stroke(ui.Rect{X: r.X - 3, Y: r.Y - 3, W: r.W + 6, H: r.H + 6}, color, radius+3, 2)
+		})
+	}
+}
+
 // buttonLabel builds a button's label text in the given role.
 func buttonLabel(c *ui.Context, role Role, label string, emphasized bool, size float32) ui.Element {
 	if size <= 0 {
@@ -195,6 +206,7 @@ func Button(c *ui.Context, spec ButtonSpec) ui.Element {
 	b.Children(func() {
 		shape := ui.Row(c).Height(d.height).PaddingX(d.pad).Gap(d.gap).Radius(radius).Background(fill).
 			Justify(ui.Center).AlignItems(ui.Center).TextColor(content).Transition(Fade(EffectsFast))
+		focusRing(c, b, shape, radius)
 		if outline.A != 0 {
 			shape.Border(1, outline)
 		}
@@ -311,6 +323,7 @@ func IconButton(c *ui.Context, spec IconButtonSpec) ui.Element {
 	}
 	b.Children(func() {
 		shape := ui.Box(c).Size(side, side).Radius(radius).Background(fill).Center()
+		focusRing(c, b, shape, radius)
 		if outline.A != 0 {
 			shape.Border(1, outline)
 		}
@@ -383,6 +396,7 @@ func FAB(c *ui.Context, spec FABSpec) ui.Element {
 	b.Height(size).Radius(radius).Background(StateFill(container, content, b.Hovered(), b.Pressed(), b.FocusVisible())).
 		Justify(ui.Center).AlignItems(ui.Center).Gap(8).Shrink(0).
 		TextColor(content).Cursor(ui.CursorPointer).Transition(Fade(EffectsFast))
+	focusRing(c, b, b, radius)
 	if spec.Label == "" {
 		b.Width(size)
 		if spec.Icon != nil {
@@ -420,6 +434,7 @@ func Chip(c *ui.Context, label string, selected bool, key any) ui.Element {
 		shape := ui.Row(c).Height(32).PaddingX(12).Gap(8).Radius(Small).Justify(ui.Center).AlignItems(ui.Center).
 			Background(StateFill(container, content, b.Hovered(), b.Pressed(), b.FocusVisible())).
 			TextColor(content).Transition(Fade(EffectsFast))
+		focusRing(c, b, shape, Small)
 		if outline.A != 0 {
 			shape.Border(1, outline)
 		}
@@ -443,9 +458,11 @@ func IconChip(c *ui.Context, icon *ui.SVG, label string, key any) ui.Element {
 	b := newButtonBase(c, key)
 	b.Size(MinTarget, MinTarget).Margin(-slop(32)).Center().Shrink(0).Cursor(ui.CursorPointer).Label(label)
 	b.Children(func() {
-		ui.Box(c).Size(32, 32).Radius(Small).Center().TextColor(sc.OnSurfaceVariant).Transition(Fade(EffectsFast)).
+		shape := ui.Box(c).Size(32, 32).Radius(Small).Center().TextColor(sc.OnSurfaceVariant).Transition(Fade(EffectsFast)).
 			Background(StateFill(ui.Transparent, sc.OnSurfaceVariant, b.Hovered(), b.Pressed(), b.FocusVisible())).
-			Border(1, sc.OutlineVariant).Children(func() {
+			Border(1, sc.OutlineVariant)
+		focusRing(c, b, shape, Small)
+		shape.Children(func() {
 			ui.Icon(c, icon).FontSize(18).TextColor(sc.OnSurfaceVariant)
 		})
 	})

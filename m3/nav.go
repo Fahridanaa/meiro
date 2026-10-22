@@ -138,13 +138,14 @@ func navItem(c *ui.Context, item NavItem, selected, expanded bool, fade, railWid
 		height := 32 + 8*open
 		fill := sc.SecondaryContainer.Alpha(sel)
 		pill.Width(railWidth-2*railInset).Height(height).Margin(6-(height-32)/2, railInset, 0, railInset).Shrink(0).ClipX().
-			Background(StateFill(fill, sc.OnSurface, b.Hovered() && !selected, b.Pressed(), b.FocusVisible())).
-			Children(func() {
-				ui.Icon(c, icon).FontSize(24).TextColor(iconColor).Shrink(0)
-				if expanded {
-					LabelLarge.Style(ui.Text(c, item.Label), selected).TextColor(labelColor).Grow(1).MinWidth(0).SingleLine().Opacity(fade)
-				}
-			})
+			Background(StateFill(fill, sc.OnSurface, b.Hovered() && !selected, b.Pressed(), b.FocusVisible()))
+		focusRing(c, b, pill, Full)
+		pill.Children(func() {
+			ui.Icon(c, icon).FontSize(24).TextColor(iconColor).Shrink(0)
+			if expanded {
+				LabelLarge.Style(ui.Text(c, item.Label), selected).TextColor(labelColor).Grow(1).MinWidth(0).SingleLine().Opacity(fade)
+			}
+		})
 		if !expanded {
 			LabelMedium.Style(ui.Text(c, item.Label), selected).TextColor(labelColor).Width(RailCollapsed).TextAlign(ui.Center).SingleLine().
 				Margin(4, 0, 0, 0).Opacity(fade)

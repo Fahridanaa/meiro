@@ -35,7 +35,7 @@ func (a *app) hero(c *ui.Context) {
 	ui.Row(c).Padding(8, pageGutter, 28).Gap(gap).AlignItems(ui.End).Gradient(wash, sc.Surface, 180).Children(func() {
 		art = a.art(c, d.art, 448, artSize, artRadius, func() {
 			catcher = ui.ButtonBase(c.Key("hero-art")).Size(artSize, artSize).Attach(ui.AnchorTopLeft, ui.AnchorTopLeft).
-				Background(ui.Transparent).Label("More options for " + d.title)
+				Radius(artRadius).Background(ui.Transparent).Label("More options for " + d.title)
 			menuAnchor, hasAnchor = a.menu.pointerAnchor(c, "hero")
 		})
 		m3.Elevation(c, art, 2)
@@ -77,6 +77,9 @@ func (a *app) hero(c *ui.Context) {
 	if catcher.RightClicked() {
 		x, y, _ := catcher.PointerPosition()
 		a.menu.show("hero", true, x, y)
+	}
+	if catcher.Clicked() || catcher.Shortcut(ui.Shift, ui.KeyF10) {
+		a.menu.show("hero", false, 0, 0)
 	}
 	if a.menu.owns("hero") {
 		a.heroMenu(c, a.menu.anchor(art, menuAnchor, hasAnchor))
