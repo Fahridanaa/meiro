@@ -105,6 +105,94 @@ func TestEveryPageLoadsAndDraws(t *testing.T) {
 	}
 }
 
+func blurSearchBar(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	for range 8 {
+		if !tt.Focused(label) && !tt.Focused("Close the search") && !tt.Focused("Clear search") {
+			return
+		}
+		tt.Key(0, ui.KeyTab)
+	}
+	t.Fatalf("Tab did not move focus out of the %q search bar", label)
+}
+
+func assertSearchInputKeepsBoundsOnFocus(t *testing.T, tt *ui.Tester, label string) {
+	t.Helper()
+	before, ok := tt.Find(label)
+	if !ok {
+		t.Fatalf("search input %q is missing: %q", label, tt.Texts())
+	}
+	if err := tt.Click(label); err != nil {
+		t.Fatal(err)
+	}
+	tt.Move(0, 0)
+	tt.Frame()
+	if !tt.Focused(label) {
+		t.Fatalf("clicking %q did not focus the search input", label)
+	}
+	after, ok := tt.Find(label)
+	if !ok {
+		t.Fatalf("focused search input %q is missing: %q", label, tt.Texts())
+	}
+	if before != after {
+		t.Errorf("search input %q moved on focus: before %v, after %v", label, before, after)
+	}
+}
+
+func TestSearchInputsKeepBoundsWhenFocused(t *testing.T) {
+	t.Run("global", func(t *testing.T) {
+		a := newTestApp(t)
+		a.router.Push("/home")
+		tt := ui.NewTester(a.view, 1000, 700)
+		tt.Frame()
+		if tt.Focused(searchPlaceholder) {
+			t.Fatal("the home page's search input unexpectedly starts focused")
+		}
+		assertSearchInputKeepsBoundsOnFocus(t, tt, searchPlaceholder)
+	})
+
+	t.Run("settings", func(t *testing.T) {
+		a := newTestApp(t)
+		a.router.Push("/settings")
+		tt := ui.NewTester(a.view, 1000, 700)
+		tt.Frame()
+		if err := tt.Click("Search settings"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(300 * time.Millisecond)
+		tt.Type("discord")
+		tt.Frame()
+		blurSearchBar(t, tt, "Search settings")
+		if !a.settingsSearch.open {
+			t.Fatal("the settings search closed when its field lost focus")
+		}
+		assertSearchInputKeepsBoundsOnFocus(t, tt, "Search settings")
+	})
+
+	t.Run("playlist", func(t *testing.T) {
+		a, _ := playbackApp(t)
+		a.router.Push("/playlist/VLPL_songs")
+		tt := ui.NewTester(a.view, 1000, 700)
+		for i := 0; i < 20 && len(a.page.playable) == 0; i++ {
+			tt.Frame()
+		}
+		if len(a.page.playable) == 0 {
+			t.Fatal("the test playlist did not load")
+		}
+		if err := tt.Click("Search in this playlist"); err != nil {
+			t.Fatal(err)
+		}
+		tt.Advance(300 * time.Millisecond)
+		tt.Type("ameiro")
+		tt.Frame()
+		blurSearchBar(t, tt, "Search in this playlist")
+		if !a.detailSearchOpen {
+			t.Fatal("the playlist search closed when its field lost focus")
+		}
+		assertSearchInputKeepsBoundsOnFocus(t, tt, "Search in this playlist")
+	})
+}
+
 // Settings' search button opens a local filter without changing pages.
 func TestSettingsSearchFiltersSettingsInPlace(t *testing.T) {
 	a := newTestApp(t)
