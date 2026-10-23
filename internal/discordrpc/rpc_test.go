@@ -181,11 +181,11 @@ func TestSessionReconnectsAfterDiscordClosesIPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	connections := make(chan net.Conn, 2)
-	session := newSession(id, func(context.Context) (net.Conn, error) {
+	session := newSessionWithRetryInterval(id, func(context.Context) (net.Conn, error) {
 		client, server := net.Pipe()
 		connections <- server
 		return client, nil
-	})
+	}, 10*time.Millisecond)
 	defer session.Close()
 	session.Update(State{VideoID: "track-1", Title: "Song", Playing: true})
 

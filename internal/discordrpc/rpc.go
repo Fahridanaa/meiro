@@ -70,10 +70,11 @@ type State struct {
 // Session keeps Discord's activity in step with the latest playback state.
 // Updates are coalesced so slow IPC never blocks the app's main thread.
 type Session struct {
-	updates  chan State
-	stop     chan struct{}
-	done     chan struct{}
-	stopOnce sync.Once
+	updates       chan State
+	stop          chan struct{}
+	done          chan struct{}
+	stopOnce      sync.Once
+	retryInterval time.Duration
 }
 
 type dialFunc func(context.Context) (net.Conn, error)
@@ -84,7 +85,19 @@ func New(id ApplicationID) *Session {
 }
 
 func newSession(id ApplicationID, dial dialFunc) *Session {
-	s := &Session{updates: make(chan State, 1), stop: make(chan struct{}), done: make(chan struct{})}
+	return newSessionWithRetryInterval(id, dial, retryInterval)
+}
+
+// newSessionWithRetryInterval lets tests exercise reconnects without waiting
+// for the production retry interval.
+func newSessionWithRetryInterval(id ApplicationID, dial dialFunc, interval time.Duration) *Session {
+	if interval <= 0 {
+		interval = retryInterval
+	}
+	s := &Session{
+		updates: make(chan State, 1), stop: make(chan struct{}), done: make(chan struct{}),
+		retryInterval: interval,
+	}
 	go s.run(id, dial)
 	return s
 }
@@ -126,7 +139,7 @@ func (s *Session) run(id ApplicationID, dial dialFunc) {
 	var sent bool
 	var lastStartedAt int64
 	retryAt := time.Time{}
-	ticker := time.NewTicker(retryCheck)
+	ticker := time.NewTicker(min(retryCheck, s.retryInterval))
 	defer ticker.Stop()
 
 	closeConnection := func(clear bool) {
@@ -160,7 +173,7 @@ func (s *Session) run(id ApplicationID, dial dialFunc) {
 			connected, err := connect(ctx, id, dial)
 			cancel()
 			if err != nil {
-				retryAt = time.Now().Add(retryInterval)
+				retryAt = time.Now().Add(s.retryInterval)
 				return
 			}
 			conn = connected
@@ -188,7 +201,7 @@ func (s *Session) run(id ApplicationID, dial dialFunc) {
 		if err := setActivity(conn, reader, activity); err != nil {
 			log.Printf("update Discord Rich Presence: %v", err)
 			closeConnection(false)
-			retryAt = time.Now().Add(retryInterval)
+			retryAt = time.Now().Add(s.retryInterval)
 			return
 		}
 		lastStartedAt = startedAt
@@ -209,7 +222,7 @@ func (s *Session) run(id ApplicationID, dial dialFunc) {
 					log.Printf("Discord Rich Presence disconnected: %v", result.err)
 				}
 				closeConnection(false)
-				retryAt = time.Now().Add(retryInterval)
+				retryAt = time.Now().Add(s.retryInterval)
 			}
 		case <-s.stop:
 			closeConnection(true)

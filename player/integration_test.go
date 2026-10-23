@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -16,13 +17,17 @@ import (
 // newTestPlayer returns a player on the fake speaker, and a three second
 // sine wave made by ffmpeg to play.
 func newTestPlayer(t *testing.T) (*Player, string) {
+	return newTestPlayerWithDuration(t, 3)
+}
+
+func newTestPlayerWithDuration(t *testing.T, seconds int) (*Player, string) {
 	t.Helper()
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skip("ffmpeg is not installed")
 	}
 	wav := filepath.Join(t.TempDir(), "tone.wav")
-	if out, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=3", wav).CombinedOutput(); err != nil {
+	if out, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration="+strconv.Itoa(seconds), wav).CombinedOutput(); err != nil {
 		t.Fatalf("making a tone: %v: %s", err, out)
 	}
 	p := New(WithFFmpeg(ffmpeg), WithNullAudio())

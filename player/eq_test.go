@@ -4,22 +4,12 @@ import (
 	"bytes"
 	"io"
 	"math"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestSetEQChangesFilterWithoutChangingTheDecoder(t *testing.T) {
-	p, _ := newTestPlayer(t)
-	ffmpeg, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		t.Skip("ffmpeg is not installed")
-	}
-	wav := filepath.Join(t.TempDir(), "long-tone.wav")
-	if output, err := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=30", wav).CombinedOutput(); err != nil {
-		t.Fatalf("making a long tone: %v: %s", err, output)
-	}
+	p, wav := newTestPlayerWithDuration(t, 10)
 	if err := p.Play(wav); err != nil {
 		t.Fatal(err)
 	}
