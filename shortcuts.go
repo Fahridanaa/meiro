@@ -94,6 +94,24 @@ func (a *app) shortcuts(c *ui.Context) {
 	}
 }
 
+// reserveSpaceForPlayback reserves Space for playback throughout the shell.
+// MyGo gives Space to the focused control before window shortcuts, so pressing
+// it after a click activated that control instead of the player. The shell
+// claim takes Space from its controls, including switches, and hands it to the
+// play or pause shortcut. Text fields take Space as typing before the claim is
+// read, and dialogs outside the shell keep their own Space behavior.
+func (a *app) reserveSpaceForPlayback(shell ui.Element) {
+	if a.keyboard.recording != "" {
+		return // the field taking the new key reads Space itself
+	}
+	for _, b := range a.keyMap().Bindings(keymap.PlayPause) {
+		if b.Key != ui.KeySpace || b.Modifiers() != 0 {
+			continue
+		}
+		shell.OnShortcut(0, ui.KeySpace, func() { a.perform(keymap.PlayPause) })
+	}
+}
+
 // volumeStep is how much a shortcut moves the volume.
 const volumeStep = 5
 
