@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - **The system tray shows Meiro's wordmark instead of its square app icon.**
+- **Artwork and avatars use native rounded corners.** Their shape stays consistent as the image scales, and the cache no longer keeps separate copies for different corner radii.
 
 ### Fixed
 
