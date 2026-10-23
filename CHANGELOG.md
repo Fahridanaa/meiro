@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Linux desktop widgets get higher-resolution cover art.** MPRIS requests a larger image when the cover URL supports it.
+
 ## [0.4.8] - 2026-10-23
 
 ### Changed
