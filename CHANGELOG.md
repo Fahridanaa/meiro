@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **The macOS and Linux system trays show Meiro's wordmark. Windows keeps the coloured app icon so it stays visible in the tray and track notifications.**
 - **Artwork and avatars use native rounded corners.** Their shape stays consistent as the image scales, and the cache no longer keeps separate copies for different corner radii.
+- **Expanded navigation follows the Material 3 rail layout.** The selected row fills the available rail width; inactive destinations stay clear.
 
 ### Fixed
 

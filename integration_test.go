@@ -139,6 +139,59 @@ func assertSearchInputKeepsBoundsOnFocus(t *testing.T, tt *ui.Tester, label stri
 	}
 }
 
+func TestExpandedNavigationMetricsAndFullWidthSelection(t *testing.T) {
+	a := newTestApp(t)
+	tt := ui.NewTester(a.view, 1280, 720)
+	if err := tt.Click("Expand navigation"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(time.Second)
+
+	home, ok := tt.Find("Home")
+	if !ok {
+		t.Fatalf("expanded navigation has no Home destination: %q", tt.Texts())
+	}
+	search, ok := tt.Find("Search")
+	if !ok {
+		t.Fatalf("expanded navigation has no Search destination: %q", tt.Texts())
+	}
+	if home.W < 230 || home.W > 240 {
+		t.Errorf("expanded navigation width is %g DIPs, want to stay near 236", home.W)
+	}
+	if pitch := search.Y - home.Y; pitch < 55 || pitch > 57 {
+		t.Errorf("expanded navigation row pitch is %g DIPs, want 56", pitch)
+	}
+	image := tt.Image()
+	x, y := int(home.X+100), int(home.Y)
+	selected := image.RGBAAt(x, y+1)
+	outside := image.RGBAAt(x, y-5)
+	if selected == outside {
+		t.Errorf("the selected 56-DIP indicator is missing: selected=%v outside=%v", selected, outside)
+	}
+	activeLeft := image.RGBAAt(int(home.X+25), int(home.Y+28))
+	leftMargin := image.RGBAAt(int(home.X+5), int(home.Y+28))
+	if activeLeft == leftMargin {
+		t.Errorf("the selected background does not reach the left rail inset: row=%v margin=%v", activeLeft, leftMargin)
+	}
+	activeRight := image.RGBAAt(int(home.X+200), int(home.Y+28))
+	activeMargin := image.RGBAAt(int(home.X+220), int(home.Y+28))
+	if activeRight == activeMargin {
+		t.Errorf("the selected background escapes the rail's horizontal insets: right=%v margin=%v", activeRight, activeMargin)
+	}
+	for _, label := range []string{"Search", "Explore", "Library", "Settings"} {
+		row, ok := tt.Find(label)
+		if !ok {
+			t.Errorf("expanded navigation has no %s destination: %q", label, tt.Texts())
+			continue
+		}
+		inside := image.RGBAAt(int(row.X+200), int(row.Y+28))
+		outside := image.RGBAAt(int(row.X+5), int(row.Y+28))
+		if inside != outside {
+			t.Errorf("%s has an unintended idle indicator: inside=%v outside=%v", label, inside, outside)
+		}
+	}
+}
+
 func TestSearchInputsKeepBoundsWhenFocused(t *testing.T) {
 	t.Run("global", func(t *testing.T) {
 		a := newTestApp(t)
