@@ -21,6 +21,27 @@ import (
 	"github.com/elianiva/meiro/youtube"
 )
 
+func TestTrayIconUsesPlatformAppropriateMark(t *testing.T) {
+	for _, tc := range []struct {
+		goos     string
+		name     string
+		template bool
+	}{
+		{goos: "windows", name: "icon.png", template: false},
+		{goos: "darwin", name: "tray-wordmark.png", template: true},
+		{goos: "linux", name: "tray-wordmark.png", template: true},
+	} {
+		t.Run(tc.goos, func(t *testing.T) {
+			if got := trayIconName(tc.goos); got != tc.name {
+				t.Errorf("trayIconName(%q) = %q, want %q", tc.goos, got, tc.name)
+			}
+			if got := trayIconTemplate(tc.goos); got != tc.template {
+				t.Errorf("trayIconTemplate(%q) = %v, want %v", tc.goos, got, tc.template)
+			}
+		})
+	}
+}
+
 func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	a := newTestApp(t)
 	tt := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)

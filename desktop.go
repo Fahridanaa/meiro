@@ -197,7 +197,7 @@ func (d *desktop) setTray(on bool, state trayState, mini func(*ui.Context), show
 		options := mygo.TrayOptions{
 			ID:             "meiro-tray",
 			Icon:           icon,
-			IconIsTemplate: true,
+			IconIsTemplate: trayIconTemplate(runtime.GOOS),
 			ToolTip:        state.tip,
 		}
 		if runtime.GOOS == "linux" {
@@ -233,19 +233,27 @@ func linuxTrayMenu(openMeiro func()) *mygo.Menu {
 	})
 }
 
-// trayIcon reads the transparent wordmark. Windows needs a square canvas for
-// its tray icon, so that version pads the wordmark instead of stretching it.
+// trayIcon reads the platform's tray mark. The Windows shell reuses its tray
+// icon for track notifications, so that platform keeps the coloured app icon.
 func trayIcon() ([]byte, error) {
 	dir, err := mygo.App.Path(mygo.PathResources)
 	if err != nil {
 		return nil, err
 	}
-	name := "tray-wordmark.png"
-	if runtime.GOOS == "windows" {
-		name = "tray-wordmark-windows.png"
-	}
-	return os.ReadFile(filepath.Join(dir, name))
+	return os.ReadFile(filepath.Join(dir, trayIconName(runtime.GOOS)))
 }
+
+// trayIconName and trayIconTemplate select marks that stay legible at the
+// platform's tray size. Windows whitens template images on a dark taskbar;
+// using the rounded-square app icon there would leave only a blank square.
+func trayIconName(goos string) string {
+	if goos == "windows" {
+		return "icon.png"
+	}
+	return "tray-wordmark.png"
+}
+
+func trayIconTemplate(goos string) bool { return goos != "windows" }
 
 // closeToTray wires what closing the window does to the CloseToTray setting:
 // hide the window in the tray, quit, or ask once and keep the answer.

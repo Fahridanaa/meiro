@@ -8,12 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- **The system tray shows Meiro's wordmark instead of its square app icon.**
+- **The macOS and Linux system trays show Meiro's wordmark. Windows keeps the coloured app icon so it stays visible in the tray and track notifications.**
 - **Artwork and avatars use native rounded corners.** Their shape stays consistent as the image scales, and the cache no longer keeps separate copies for different corner radii.
 
 ### Fixed
 
 - **Go to artist from the tray mini player opens the main window on that artist's page.**
+- **The Windows tray and track notifications show Meiro's coloured app icon instead of a blank white square.**
 - **Search inputs keep their contents in place when focused.** Clicking the global, Settings and playlist search fields no longer causes them to jiggle.
 - **Episode results play from search.** YouTube Music episode cards now use the video ID embedded in their episode-page link, so the card has a working Play action.
 - **Long queues keep every upcoming track after a restart.** The saved queue no longer drops songs beyond the first 200, so the Up next list and its remaining count stay complete.
