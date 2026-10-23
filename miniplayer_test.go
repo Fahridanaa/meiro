@@ -18,6 +18,7 @@ import (
 	"github.com/elianiva/meiro/internal/lrclib"
 	"github.com/elianiva/meiro/internal/playstate"
 	"github.com/elianiva/meiro/internal/settings"
+	"github.com/elianiva/meiro/youtube"
 )
 
 func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
@@ -46,6 +47,44 @@ func TestMiniPlayerShowsAndControlsWhatPlays(t *testing.T) {
 	}
 	if a.volume != 0 {
 		t.Fatalf("clicking Mute did not mute: volume = %v", a.volume)
+	}
+}
+
+func TestGoToArtistFromMiniPlayerOpensTheArtistPage(t *testing.T) {
+	a := newTestApp(t)
+	track := youtube.MusicItem{
+		VideoID: "vid-3", BrowseID: fakeArtist, Kind: youtube.KindTrack,
+		Title: "Album Track One", Subtitle: "Aurora Vale", Duration: "3:42",
+	}
+	a.queue.restore(playstate.State{Items: []youtube.MusicItem{track}, Index: 0, RecStart: -1})
+	a.current = a.queue.current()
+	a.setMiniShown(true)
+
+	main := ui.NewTester(a.view, 1000, 700)
+	main.Frame()
+	mini := ui.NewTester(a.miniPlayer, miniWidth, miniHeight)
+	mini.Frame()
+	if err := mini.Click("More options for Album Track One"); err != nil {
+		t.Fatal(err)
+	}
+	mini.Frame()
+	if !mini.HasText("Go to artist") {
+		t.Fatalf("the mini player's track menu lacks Go to artist: %q", mini.Texts())
+	}
+	if err := mini.Click("Go to artist"); err != nil {
+		t.Fatal(err)
+	}
+	mini.Frame()
+	main.Frame()
+
+	if a.path() != "/artist/"+fakeArtist {
+		t.Fatalf("Go to artist opened %q", a.path())
+	}
+	if a.nowPlaying.miniOpen {
+		t.Fatal("the mini player stayed open after opening the artist page")
+	}
+	if !main.HasText("Aurora Vale") || !main.HasText("Artist Track") {
+		t.Fatalf("the main window did not show the artist page: %q", main.Texts())
 	}
 }
 
