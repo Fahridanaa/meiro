@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - **Linux desktop widgets get higher-resolution cover art.** MPRIS requests a larger image when the cover URL supports it.
+- **The macOS and Linux tray wordmark is optically centered.** Choose the standalone O mark in Desktop settings for a quieter tray icon; Windows keeps its coloured app icon.
 
 ## [0.4.8] - 2026-10-23
 
