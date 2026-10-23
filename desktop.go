@@ -233,13 +233,18 @@ func linuxTrayMenu(openMeiro func()) *mygo.Menu {
 	})
 }
 
-// trayIcon reads the app icon for the menu bar, scaled by the system.
+// trayIcon reads the transparent wordmark. Windows needs a square canvas for
+// its tray icon, so that version pads the wordmark instead of stretching it.
 func trayIcon() ([]byte, error) {
 	dir, err := mygo.App.Path(mygo.PathResources)
 	if err != nil {
 		return nil, err
 	}
-	return os.ReadFile(filepath.Join(dir, "icon.png"))
+	name := "tray-wordmark.png"
+	if runtime.GOOS == "windows" {
+		name = "tray-wordmark-windows.png"
+	}
+	return os.ReadFile(filepath.Join(dir, name))
 }
 
 // closeToTray wires what closing the window does to the CloseToTray setting:

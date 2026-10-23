@@ -5,6 +5,8 @@
 | `wordmark-light.svg` | The name, on light backgrounds. The app itself shows only the wordmark. |
 | `wordmark-dark.svg` | The name, on dark backgrounds. |
 | `icon.svg` | The app icon, the source of `resources/icon.png`. |
+| `resources/tray-wordmark.png` | The transparent wordmark used by the macOS and Linux tray. |
+| `resources/tray-wordmark-windows.png` | The same wordmark on a square transparent canvas for Windows' tray icon. |
 
 The wordmark reads **me!ro**. The *i* is MyGO!!!!!'s `!`, tilted like a lost
 compass needle, and the *o* is a ring of five overlapping pieces, one per
@@ -37,3 +39,9 @@ highlight on each piece, and one soft shadow under the ring and the play mark.
 `resources/icon.png` is `icon.svg` exported at 1024 × 1024 with a transparent
 background, the rounded square scaled to 824 px and centred (the macOS icon
 grid), with a soft shadow under it.
+
+The macOS and Linux tray image is a transparent PNG export of
+`wordmark-light.svg`, 191 × 64 px. MyGo creates Windows tray icons with equal
+width and height, so `tray-wordmark-windows.png` centres the same artwork on a
+192 × 192 px canvas instead of distorting it. The system tints template icons
+on macOS and Windows; Linux receives the original colours.

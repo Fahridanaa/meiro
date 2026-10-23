@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **The system tray shows Meiro's wordmark instead of its square app icon.**
+
 ### Fixed
 
 - **Search inputs keep their contents in place when focused.** Clicking the global, Settings and playlist search fields no longer causes them to jiggle.
