@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - **Search inputs keep their contents in place when focused.** Clicking the global, Settings and playlist search fields no longer causes them to jiggle.
+- **Episode results play from search.** YouTube Music episode cards now use the video ID embedded in their episode-page link, so the card has a working Play action.
 
 ## [0.4.7] - 2026-10-22
 

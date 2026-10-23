@@ -541,8 +541,32 @@ func TestSearchingFromAnotherPage(t *testing.T) {
 	}
 }
 
-// A search shows the filters YouTube offers for it, without one of the app's
-// own, and each one searches the query again with the parameters it carries.
+// An episode top result exposes Play and resolves the video ID carried by its
+// episode-page browse ID.
+func TestSearchEpisodeTopResultPlays(t *testing.T) {
+	a, streams := playbackApp(t)
+	a.router.Push("/search")
+	tt := ui.NewTester(a.view, 1000, 700)
+	tt.Frame()
+	if err := tt.Click("Search songs, albums, artists, podcasts"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Type("play episode result")
+	tt.Key(0, ui.KeyEnter)
+	tt.Frame()
+	if !tt.HasText("Find Me feat.Hina from miolly") || !tt.HasText("Play") {
+		t.Fatalf("the episode result offers no play action: %q", tt.Texts())
+	}
+	if err := tt.Click("Play"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if a.current.VideoID != "UZ83quirqLA" {
+		t.Fatalf("the episode played video %q, want UZ83quirqLA", a.current.VideoID)
+	}
+	waitFor(t, func() bool { return streams.asked("UZ83quirqLA") })
+}
+
 func TestSearchShowsYouTubesFilters(t *testing.T) {
 	a := newTestApp(t)
 	a.router.Push("/search")
