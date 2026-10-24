@@ -63,8 +63,8 @@ func Rail(c *ui.Context, spec RailSpec) RailEvent {
 	sc := Of(c).Scheme
 	rail := ui.Column(c.Key("m3-rail"))
 	// One progress drives the width and the layout, so they stay in step:
-	// the labels swap between under and beside their icons at the midpoint,
-	// while they are faded out. The icons and pills never swap.
+	// labels fade between two fixed layouts while the toggle glyph rotates
+	// through its change and the selected pill grows with the rail.
 	// The spring does not overshoot: a rail that rings past its width
 	// re-lays out the whole page on every frame of the wobble.
 	p := Animate(rail, "expand", pick(spec.Expanded, float32(1), 0), railSpring)
@@ -72,17 +72,13 @@ func Rail(c *ui.Context, spec RailSpec) RailEvent {
 	railWidth := RailCollapsed + (RailExpanded-RailCollapsed)*p
 	expanded := p > 0.5
 	fade := min(abs32(2*p-1)*railFadeGain, 1)
-	rail.Width(railWidth).Shrink(0).FillHeight().ClipX().PaddingY(12).Gap(4 * (1 - p)).
+	rail.Width(railWidth).Shrink(0).FillHeight().ClipX().PaddingY(12).Gap(4).
 		Background(sc.SurfaceContainerLow)
 	rail.AlignItems(ui.Start).Children(func() {
 		if spec.TopInset > 0 {
 			ui.Box(c).Height(spec.TopInset).FillWidth().Shrink(0).DragWindow()
 		}
-		menu := IconButton(c, IconButtonSpec{
-			Icon:  pick(expanded, IconMenuOpen, IconMenu),
-			Label: pick(expanded, "Collapse navigation", "Expand navigation"),
-			Key:   "rail-menu",
-		})
+		menu := railMenu(c, p, expanded)
 		// The button sits on the collapsed icon's centre line at every width:
 		// centring it in the rail would slide it while the rail grows.
 		// Its pointer target is MinTarget wide and its shape is
@@ -108,14 +104,38 @@ func Rail(c *ui.Context, spec RailSpec) RailEvent {
 	return event
 }
 
+// railMenu rotates the old and new glyphs through the transition, without
+// changing the button's hit target or moving it off the collapsed icon's
+// centre line.
+func railMenu(c *ui.Context, open float32, expanded bool) ui.Element {
+	sc := Of(c).Scheme
+	label := pick(expanded, "Collapse navigation", "Expand navigation")
+	b := ui.ButtonBase(c.Key("rail-menu"))
+	b.Size(MinTarget, MinTarget).Center().Cursor(ui.CursorPointer).Label(label).Tooltip(label).Transition(Fade(EffectsFast))
+	b.Children(func() {
+		fill := StateFill(ui.Transparent, sc.OnSurfaceVariant, b.Hovered(), b.Pressed(), b.FocusVisible())
+		shape := ui.Box(c).Size(32, 32).Radius(16).Background(fill).Center()
+		focusRing(c, b, shape, 16)
+		shape.Children(func() {
+			icons := ui.Box(c).Size(24, 24).Center()
+			icons.Children(func() {
+				ui.Icon(c, IconMenu).Absolute().Top(0).Left(0).Size(24, 24).
+					Rotate(180 * open).Opacity(1 - open)
+				ui.Icon(c, IconMenuOpen).Absolute().Top(0).Left(0).Size(24, 24).
+					Rotate(180 * (open - 1)).Opacity(open)
+			})
+		})
+	})
+	return b
+}
+
 // navItem is one destination. Its icon and pill keep their identities as the
 // rail changes width: the pill is the collapsed indicator at one end and the
-// expanded row at the other. Only the label changes place, from under the
-// icon to beside it, and it does that while faded out.
+// expanded row at the other. The label switches between its stacked and
+// inline positions while faded out, rather than travelling between them.
 func navItem(c *ui.Context, item NavItem, selected, expanded bool, fade, railWidth float32) bool {
 	sc := Of(c).Scheme
 	open := min(max((railWidth-RailCollapsed)/(RailExpanded-RailCollapsed), 0), 1)
-	rowHeight := 64 - 8*open
 	b := ui.ButtonBase(c.Key("nav-" + item.ID))
 	icon := item.Icon
 	if selected && item.Selected != nil {
@@ -126,7 +146,9 @@ func navItem(c *ui.Context, item NavItem, selected, expanded bool, fade, railWid
 		iconColor, labelColor = sc.OnSecondaryContainer, sc.OnSecondaryContainer
 	}
 
-	b.Column().Width(railWidth).Height(rowHeight).Justify(ui.Start).AlignItems(ui.Start).Cursor(ui.CursorPointer).Label(item.Label)
+	// Keep each destination's row anchored while the icon shifts down inside
+	// the taller expanded pill; shrinking the rows would pull later icons up.
+	b.Column().Width(railWidth).Height(64).Justify(ui.Start).AlignItems(ui.Start).Cursor(ui.CursorPointer).Label(item.Label)
 	b.Children(func() {
 		pill := ui.Row(c).Radius(Full).AlignItems(ui.Center)
 		target := float32(0)
@@ -134,8 +156,8 @@ func navItem(c *ui.Context, item NavItem, selected, expanded bool, fade, railWid
 			target = 1
 		}
 		sel := min(max(Animate(pill, "sel", target, SpatialDefault), 0), 1)
-		// In the expanded rail, the selected indicator fills the available
-		// row. Its center follows the collapsed icon-and-label stack.
+		// In the expanded rail, the selected indicator grows down from its
+		// anchor to give the icon and label more vertical padding.
 		height := 32 + 24*open
 		marginTop := 22 + 6*open - height/2
 		fill := ui.Transparent
@@ -149,13 +171,21 @@ func navItem(c *ui.Context, item NavItem, selected, expanded bool, fade, railWid
 		pill.PaddingX(railIconInset).Gap(8)
 		pill.Children(func() {
 			ui.Icon(c, icon).FontSize(24).TextColor(iconColor).Shrink(0)
-			if expanded {
-				LabelLarge.Style(ui.Text(c, item.Label), false).TextColor(labelColor).SingleLine().Opacity(fade)
-			}
 		})
-		if !expanded {
-			LabelMedium.Style(ui.Text(c, item.Label), selected).TextColor(labelColor).Width(RailCollapsed).TextAlign(ui.Center).SingleLine().
-				Margin(4, 0, 0, 0).Opacity(fade)
+		expandedLabelLeft := railInset + railIconInset + 24 + 8
+		if expanded {
+			label := ui.Box(c.Key("nav-label-" + item.ID)).Absolute().Top(18).Left(expandedLabelLeft).
+				Width(railWidth - expandedLabelLeft).Height(LabelLarge.Line).Opacity(fade)
+			label.Children(func() {
+				LabelLarge.Style(ui.Text(c, item.Label), false).TextColor(labelColor).SingleLine()
+			})
+		} else {
+			label := ui.Box(c.Key("nav-label-" + item.ID)).Absolute().Top(42).Left(0).
+				Width(RailCollapsed).Height(LabelMedium.Line).Opacity(fade)
+			label.Children(func() {
+				LabelMedium.Style(ui.Text(c, item.Label), selected).TextColor(labelColor).
+					TextAlign(ui.Center).SingleLine()
+			})
 		}
 		if len(item.Hint) > 0 {
 			at := ui.Box(c).Absolute().PassThrough()

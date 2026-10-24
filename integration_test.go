@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"image"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,6 +22,7 @@ import (
 	"github.com/elianiva/meiro/internal/cookies"
 	"github.com/elianiva/meiro/internal/history"
 	"github.com/elianiva/meiro/internal/settings"
+	"github.com/elianiva/meiro/m3"
 	"github.com/elianiva/meiro/youtube"
 )
 
@@ -158,8 +161,8 @@ func TestExpandedNavigationMetricsAndFullWidthSelection(t *testing.T) {
 	if home.W < 230 || home.W > 240 {
 		t.Errorf("expanded navigation width is %g DIPs, want to stay near 236", home.W)
 	}
-	if pitch := search.Y - home.Y; pitch < 55 || pitch > 57 {
-		t.Errorf("expanded navigation row pitch is %g DIPs, want 56", pitch)
+	if pitch := search.Y - home.Y; pitch < 67 || pitch > 69 {
+		t.Errorf("expanded navigation row pitch is %g DIPs, want 68", pitch)
 	}
 	image := tt.Image()
 	x, y := int(home.X+100), int(home.Y)
@@ -190,6 +193,181 @@ func TestExpandedNavigationMetricsAndFullWidthSelection(t *testing.T) {
 			t.Errorf("%s has an unintended idle indicator: inside=%v outside=%v", label, inside, outside)
 		}
 	}
+}
+
+func TestNavigationRailAndPageAnimateTogether(t *testing.T) {
+	a := newTestApp(t)
+	tt := ui.NewTester(a.view, 1280, 720)
+	menu, ok := tt.Find("Expand navigation")
+	if !ok {
+		t.Fatalf("compact navigation has no menu button: %q", tt.Texts())
+	}
+	if angle := navigationGlyphAngle(tt.Image(), menu); math.Abs(angle) > 10 {
+		t.Fatalf("compact menu glyph is not horizontal: angle %.1f°", angle)
+	}
+	compact, ok := tt.Find("Search")
+	if !ok {
+		t.Fatalf("compact navigation has no Search destination: %q", tt.Texts())
+	}
+	if center := navigationCompactLabelCenterX(tt.Image(), compact); math.Abs(center-float64(compact.X+m3.RailCollapsed/2)) > 8 {
+		t.Fatalf("compact label is not centered below its icon: center %.1f, row %v", center, compact)
+	}
+	compactRows := make(map[string]ui.Rect)
+	compactIconCenters := make(map[string]float64)
+	for _, label := range []string{"Home", "Search", "Explore", "Library", "Settings"} {
+		row, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("compact navigation has no %s destination: %q", label, tt.Texts())
+		}
+		center, ok := navigationItemIconCenterY(tt.Image(), row)
+		if !ok {
+			t.Fatalf("compact navigation has no visible icon for %s", label)
+		}
+		compactRows[label] = row
+		compactIconCenters[label] = center
+	}
+	compactPage, ok := tt.Find("Up late?")
+	if !ok {
+		t.Fatalf("home page is missing: %q", tt.Texts())
+	}
+
+	if err := tt.Click("Expand navigation"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(80 * time.Millisecond)
+	if angle := navigationGlyphAngle(tt.Image(), menu); math.Abs(angle) < 20 {
+		t.Fatalf("menu glyph did not rotate during the rail transition: angle %.1f°", angle)
+	}
+	openingLabel, ok := tt.Find("Search")
+	if !ok {
+		t.Fatalf("Search disappeared during the rail transition: %q", tt.Texts())
+	}
+	if center := navigationCompactLabelCenterX(tt.Image(), openingLabel); math.Abs(center-float64(openingLabel.X+m3.RailCollapsed/2)) > 8 {
+		t.Fatalf("compact label slid before switching layouts: center %.1f, row %v", center, openingLabel)
+	}
+	tt.Advance(70 * time.Millisecond)
+	opening, ok := tt.Find("Search")
+	if !ok || opening.W <= compact.W || opening.W >= 230 {
+		t.Fatalf("rail did not pass smoothly through an intermediate width: compact %g, opening %v", compact.W, opening)
+	}
+	openingPage, ok := tt.Find("Up late?")
+	if !ok || openingPage.X <= compactPage.X {
+		t.Fatalf("page did not move with the opening rail: compact %v, opening %v", compactPage, openingPage)
+	}
+	tt.Advance(time.Second)
+	expanded, ok := tt.Find("Search")
+	if !ok || expanded.W < 230 || expanded.W > 240 {
+		t.Fatalf("rail did not settle at its expanded width: %v", expanded)
+	}
+	expandedPage, ok := tt.Find("Up late?")
+	if !ok || expandedPage.X <= openingPage.X {
+		t.Fatalf("page stopped following the rail: opening %v, expanded %v", openingPage, expandedPage)
+	}
+	for label, compactRow := range compactRows {
+		row, ok := tt.Find(label)
+		if !ok {
+			t.Fatalf("expanded navigation has no %s destination: %q", label, tt.Texts())
+		}
+		if row.Y != compactRow.Y {
+			t.Errorf("%s lost its vertical anchor: compact row %v, expanded row %v", label, compactRow, row)
+		}
+		center, ok := navigationItemIconCenterY(tt.Image(), row)
+		if !ok {
+			t.Errorf("expanded navigation has no visible icon for %s", label)
+			continue
+		}
+		if delta := center - compactIconCenters[label]; delta < 4 || delta > 8 {
+			t.Errorf("%s icon did not move down within its own anchor: compact %.1f, expanded %.1f (delta %.1f)", label, compactIconCenters[label], center, delta)
+		}
+	}
+
+	if err := tt.Click("Collapse navigation"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Advance(150 * time.Millisecond)
+	closing, ok := tt.Find("Search")
+	if !ok || closing.W >= expanded.W || closing.W <= compact.W {
+		t.Fatalf("rail did not pass smoothly through an intermediate width while closing: expanded %g, closing %v", expanded.W, closing)
+	}
+	closingPage, ok := tt.Find("Up late?")
+	if !ok || closingPage.X >= expandedPage.X {
+		t.Fatalf("page did not follow the closing rail: expanded %v, closing %v", expandedPage, closingPage)
+	}
+	tt.Advance(time.Second)
+	collapsed, ok := tt.Find("Search")
+	if !ok || collapsed.W != compact.W {
+		t.Fatalf("rail did not return to its compact width: start %g, end %v", compact.W, collapsed)
+	}
+}
+
+func navigationGlyphAngle(img *image.RGBA, button ui.Rect) float64 {
+	left := int(button.X + (button.W-24)/2)
+	top := int(button.Y + (button.H-24)/2)
+	var points [][2]float64
+	for y := top; y < top+24; y++ {
+		for x := left; x < left+24; x++ {
+			pixel := img.RGBAAt(x, y)
+			if pixel.R < 110 && pixel.G < 110 && pixel.B < 110 {
+				points = append(points, [2]float64{float64(x - left), float64(y - top)})
+			}
+		}
+	}
+	if len(points) == 0 {
+		return 0
+	}
+	var meanX, meanY float64
+	for _, point := range points {
+		meanX += point[0]
+		meanY += point[1]
+	}
+	meanX /= float64(len(points))
+	meanY /= float64(len(points))
+	var varianceX, varianceY, covariance float64
+	for _, point := range points {
+		dx, dy := point[0]-meanX, point[1]-meanY
+		varianceX += dx * dx
+		varianceY += dy * dy
+		covariance += dx * dy
+	}
+	return 0.5 * math.Atan2(2*covariance, varianceX-varianceY) * 180 / math.Pi
+}
+
+func navigationCompactLabelCenterX(img *image.RGBA, row ui.Rect) float64 {
+	minX, maxX := int(row.X+row.W), int(row.X)
+	left, right := int(row.X), int(min(row.X+row.W, row.X+m3.RailCollapsed))
+	top, bottom := int(row.Y+row.H-24), int(row.Y+row.H)
+	for y := top; y < bottom; y++ {
+		for x := left; x < right; x++ {
+			pixel := img.RGBAAt(x, y)
+			if pixel.R < 110 && pixel.G < 110 && pixel.B < 110 {
+				minX = min(minX, x)
+				maxX = max(maxX, x)
+			}
+		}
+	}
+	if maxX < minX {
+		return 0
+	}
+	return float64(minX+maxX) / 2
+}
+
+func navigationItemIconCenterY(img *image.RGBA, row ui.Rect) (float64, bool) {
+	left := int(row.X + m3.RailCollapsed/2 - 12)
+	top, bottom := int(row.Y), min(int(row.Y+40), img.Bounds().Max.Y)
+	minY, maxY := bottom, top
+	for y := top; y < bottom; y++ {
+		for x := left; x < left+24; x++ {
+			pixel := img.RGBAAt(x, y)
+			if pixel.R < 110 && pixel.G < 110 && pixel.B < 110 {
+				minY = min(minY, y)
+				maxY = max(maxY, y)
+			}
+		}
+	}
+	if maxY < minY {
+		return 0, false
+	}
+	return float64(minY+maxY) / 2, true
 }
 
 func TestSearchInputsKeepBoundsWhenFocused(t *testing.T) {
