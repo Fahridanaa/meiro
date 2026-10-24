@@ -388,10 +388,7 @@ func (a *app) windowTitle() string {
 	if a.current.VideoID == "" || !a.player.Playing() {
 		return "Meiro"
 	}
-	artist := a.current.Artists
-	if artist == "" {
-		artist = a.current.Artist
-	}
+	artist := shownArtist(a.current)
 	if artist == "" {
 		return a.current.Title
 	}
